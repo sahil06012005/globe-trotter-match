@@ -8,13 +8,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/context/AuthContext";
 import { Globe } from "lucide-react";
 
-const Login = () => {
+const Register = () => {
   const navigate = useNavigate();
-  const { signIn } = useAuth();
+  const { signUp } = useAuth();
   const [formData, setFormData] = useState({
+    fullName: "",
     email: "",
     password: "",
-    rememberMe: false
+    agreeTerms: false
   });
   const [isLoading, setIsLoading] = useState(false);
   
@@ -24,16 +25,26 @@ const Login = () => {
   };
   
   const handleCheckboxChange = (checked: boolean) => {
-    setFormData(prev => ({ ...prev, rememberMe: checked }));
+    setFormData(prev => ({ ...prev, agreeTerms: checked }));
   };
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!formData.agreeTerms) {
+      return; // Don't proceed if terms aren't accepted
+    }
+    
     setIsLoading(true);
     
     try {
-      await signIn(formData.email, formData.password);
-      navigate("/");
+      await signUp(formData.email, formData.password, { 
+        full_name: formData.fullName 
+      });
+      
+      // In a real app with email confirmation, we might redirect to a "check your email" page
+      // For now, we'll redirect to login
+      navigate("/login");
     } catch (error) {
       // Error is handled in the Auth context
     } finally {
@@ -47,11 +58,11 @@ const Login = () => {
       <div 
         className="hidden md:block md:w-1/2 bg-cover bg-center"
         style={{ 
-          backgroundImage: "url('https://images.unsplash.com/photo-1503220317375-aaad61436b1b?auto=format&fit=crop&w=1000&q=80')"
+          backgroundImage: "url('https://images.unsplash.com/photo-1530521954074-e64f6810b32d?auto=format&fit=crop&w=1000&q=80')"
         }}
       />
       
-      {/* Right Side - Login Form */}
+      {/* Right Side - Registration Form */}
       <div className="w-full md:w-1/2 flex justify-center items-center p-8 bg-white">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
@@ -59,11 +70,24 @@ const Login = () => {
               <Globe className="h-6 w-6 text-triplink-blue" />
               <span className="text-2xl font-bold text-triplink-blue">TripLink</span>
             </Link>
-            <h1 className="text-2xl font-bold mt-6">Welcome back</h1>
-            <p className="text-gray-600">Login to your TripLink account</p>
+            <h1 className="text-2xl font-bold mt-6">Create your account</h1>
+            <p className="text-gray-600">Join TripLink and find your perfect travel companions</p>
           </div>
           
           <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Full Name</Label>
+              <Input
+                id="fullName"
+                name="fullName"
+                type="text"
+                placeholder="John Doe"
+                value={formData.fullName}
+                onChange={handleChange}
+                required
+              />
+            </div>
+            
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -78,47 +102,44 @@ const Login = () => {
             </div>
             
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
-                <Link 
-                  to="/forgot-password" 
-                  className="text-sm text-triplink-blue hover:underline"
-                >
-                  Forgot password?
-                </Link>
-              </div>
+              <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
                 name="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder="Create a secure password"
                 value={formData.password}
                 onChange={handleChange}
                 required
+                minLength={6}
               />
+              <p className="text-xs text-gray-500">Password must be at least 6 characters long</p>
             </div>
             
             <div className="flex items-center space-x-2">
               <Checkbox
-                id="remember"
-                checked={formData.rememberMe}
+                id="agreeTerms"
+                checked={formData.agreeTerms}
                 onCheckedChange={handleCheckboxChange}
+                required
               />
-              <Label htmlFor="remember" className="text-sm">Remember me</Label>
+              <Label htmlFor="agreeTerms" className="text-sm">
+                I agree to the <Link to="/terms" className="text-triplink-blue hover:underline">Terms of Service</Link> and <Link to="/privacy" className="text-triplink-blue hover:underline">Privacy Policy</Link>
+              </Label>
             </div>
             
             <Button 
               type="submit" 
               className="w-full bg-triplink-teal hover:bg-triplink-darkBlue"
-              disabled={isLoading}
+              disabled={isLoading || !formData.agreeTerms}
             >
-              {isLoading ? "Logging in..." : "Log In"}
+              {isLoading ? "Creating Account..." : "Create Account"}
             </Button>
             
             <p className="text-center text-sm text-gray-600">
-              Don't have an account?{" "}
-              <Link to="/register" className="text-triplink-blue hover:underline font-medium">
-                Sign up
+              Already have an account?{" "}
+              <Link to="/login" className="text-triplink-blue hover:underline font-medium">
+                Sign in
               </Link>
             </p>
             
@@ -140,21 +161,10 @@ const Login = () => {
               </Button>
             </div>
           </form>
-          
-          <div className="mt-8 text-center text-sm text-gray-500">
-            By logging in, you agree to our{" "}
-            <Link to="/terms" className="text-triplink-blue hover:underline">
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link to="/privacy" className="text-triplink-blue hover:underline">
-              Privacy Policy
-            </Link>
-          </div>
         </div>
       </div>
     </div>
   );
 };
 
-export default Login;
+export default Register;
