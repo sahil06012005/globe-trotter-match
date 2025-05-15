@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 
 export interface Trip {
   id: string;
@@ -20,8 +21,11 @@ export interface Trip {
   status: 'planning' | 'confirmed' | 'completed' | 'cancelled';
 }
 
+export type TripInput = Omit<Trip, "id" | "user_id" | "created_at" | "current_travelers">;
+
 export function useTrips() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,9 +47,7 @@ export function useTrips() {
         throw error;
       }
 
-      // Cast the data to ensure it matches our Trip interface
-      const typedData = data as Trip[];
-      setTrips(typedData || []);
+      setTrips(data as Trip[] || []);
     } catch (error: any) {
       console.error("Error fetching trips:", error);
       setError(error.message);
@@ -78,11 +80,15 @@ export function useTrips() {
     }
   }
 
-  async function createTrip(tripData: Omit<Trip, "id" | "user_id" | "created_at" | "current_travelers">) {
+  async function createTrip(tripData: TripInput) {
     try {
+      if (!user) {
+        throw new Error("User must be logged in to create a trip");
+      }
+
       const { data, error } = await supabase
         .from("trips")
-        .insert([{ ...tripData, user_id: supabase.auth.getUser().then(res => res.data.user?.id) }])
+        .insert([{ ...tripData, user_id: user.id }])
         .select()
         .single();
 

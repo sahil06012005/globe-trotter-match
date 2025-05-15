@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -5,8 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useTripRequests } from "@/hooks/use-trip-requests";
-import { TripRequest } from "@/hooks/use-trip-requests";
+import { useTripRequests, TripRequest } from "@/hooks/use-trip-requests";
 
 // Define the Profile type
 interface Profile {
@@ -45,7 +45,9 @@ const Profile = () => {
       }
     };
 
-    fetchProfile();
+    if (id) {
+      fetchProfile();
+    }
   }, [id]);
 
   useEffect(() => {
@@ -54,8 +56,10 @@ const Profile = () => {
       setUserRequests(requests);
     };
 
-    fetchUserRequests();
-  }, [getUserRequests]);
+    if (isCurrentUserProfile) {
+      fetchUserRequests();
+    }
+  }, [getUserRequests, isCurrentUserProfile]);
 
   const handleRequestAction = async (requestId: string, action: 'approved' | 'rejected') => {
     await updateRequestStatus(requestId, action);
@@ -100,8 +104,8 @@ const Profile = () => {
             userRequests.map((request) => (
               <Card key={request.id} className="mb-4">
                 <CardContent>
-                  <CardTitle>{request.trips?.title}</CardTitle>
-                  <p>Destination: {request.trips?.destination}</p>
+                  <CardTitle>{request.trips?.title || "Unnamed Trip"}</CardTitle>
+                  <p>Destination: {request.trips?.destination || "Unknown"}</p>
                   <p>Message: {request.message}</p>
                   <p>Status: {request.status}</p>
                   {request.status === 'pending' && (

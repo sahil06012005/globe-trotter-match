@@ -12,6 +12,12 @@ export interface TripRequest {
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
   updated_at: string;
+  trips?: {
+    id: string;
+    title: string;
+    destination: string;
+    image_url: string | null;
+  };
 }
 
 export function useTripRequests() {
@@ -61,7 +67,8 @@ export function useTripRequests() {
         throw error;
       }
 
-      return data || [];
+      // Cast the data to ensure it matches our TripRequest interface
+      return data as TripRequest[] || [];
     } catch (error: any) {
       console.error("Error fetching user requests:", error);
       toast({
@@ -91,7 +98,7 @@ export function useTripRequests() {
       const { data, error } = await supabase
         .from("trip_requests")
         .insert([
-          { trip_id: tripId, user_id: user.id, message }
+          { trip_id: tripId, user_id: user.id, message: message }
         ])
         .select()
         .single();
