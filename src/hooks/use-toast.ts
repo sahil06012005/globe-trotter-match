@@ -130,6 +130,8 @@ interface Toast extends Omit<ToasterToast, "id"> {
   id?: string
 }
 
+let listeners: Set<(action: Action) => void> = new Set()
+
 function dispatch(action: Action) {
   if (listeners.size === 0) {
     console.error(
@@ -142,8 +144,6 @@ function dispatch(action: Action) {
     listener(action)
   })
 }
-
-let listeners = new Set<(action: Action) => void>()
 
 function createToast(props: Toast) {
   const id = props.id || genId()
@@ -187,9 +187,16 @@ function useToast() {
   const [state, setState] = React.useState<State>({ toasts: [] })
 
   React.useEffect(() => {
-    listeners.add(setState)
+    // Add listener when the hook is first called
+    const listener = (action: Action) => {
+      setState((prevState) => reducer(prevState, action))
+    }
+    
+    listeners.add(listener)
+    
+    // Remove listener when the component unmounts
     return () => {
-      listeners.delete(setState)
+      listeners.delete(listener)
     }
   }, [])
 

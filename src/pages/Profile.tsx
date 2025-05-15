@@ -1,514 +1,128 @@
-
-import { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { useAuth } from "@/context/AuthContext";
-import { useProfile, Profile } from "@/hooks/use-profile";
-import Layout from "@/components/layout/Layout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { toast } from "@/hooks/use-toast";
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarIcon, MapPin, Globe, Upload, Edit, Save } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useTripRequests } from "@/hooks/use-trip-requests";
+import { TripRequest } from "@/hooks/use-trip-requests";
+
+// Define the Profile type
+interface Profile {
+  id: string;
+  username: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  updated_at: string | null;
+}
 
 const Profile = () => {
-  const { user } = useAuth();
-  const { profile, updateProfile, uploadAvatar, isLoading: isProfileLoading } = useProfile();
-  const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  
-  const [isCurrentUser, setIsCurrentUser] = useState<boolean>(false);
-  const [isEditing, setIsEditing] = useState<boolean>(false);
-  const [viewedProfile, setViewedProfile] = useState<Profile | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  
-  const [formData, setFormData] = useState({
-    full_name: "",
-    username: "",
-    bio: "",
-    location: "",
-    age: "",
-    gender: "",
-    interests: [] as string[],
-    languages: [] as string[]
-  });
-  
-  const [newInterest, setNewInterest] = useState("");
-  const [newLanguage, setNewLanguage] = useState("");
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const { user } = useAuth();
+  const { getUserRequests, updateRequestStatus } = useTripRequests();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [userRequests, setUserRequests] = useState<TripRequest[]>([]);
+  const isCurrentUserProfile = user?.id === id;
 
   useEffect(() => {
-    // Check if viewing own profile or another user's
-    if (user && id) {
-      setIsCurrentUser(user.id === id);
-    }
+    const fetchProfile = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", id)
+          .single();
 
-    // If we're viewing someone else's profile, fetch it
-    if (id && id !== user?.id) {
-      fetchUserProfile(id);
-    } else if (profile) {
-      // For own profile, use the data from the hook
-      setViewedProfile(profile);
-      setFormData({
-        full_name: profile.full_name || "",
-        username: profile.username || "",
-        bio: profile.bio || "",
-        location: profile.location || "",
-        age: profile.age?.toString() || "",
-        gender: profile.gender || "",
-        interests: profile.interests || [],
-        languages: profile.languages || []
-      });
-      setIsLoading(false);
-    }
-  }, [user, id, profile]);
+        if (error) {
+          throw error;
+        }
 
-  const fetchUserProfile = async (userId: string) => {
-    try {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .single();
-      
-      if (error) throw error;
-      
-      setViewedProfile(data);
-      setIsLoading(false);
-    } catch (error) {
-      console.error("Error fetching profile:", error);
-      toast({
-        title: "Error loading profile",
-        description: "Unable to load this user's profile.",
-        variant: "destructive"
-      });
-      navigate("/");
-    }
+        setProfile(data);
+      } catch (error: any) {
+        console.error("Error fetching profile:", error);
+        // Handle error appropriately (e.g., show a toast)
+      }
+    };
+
+    fetchProfile();
+  }, [id]);
+
+  useEffect(() => {
+    const fetchUserRequests = async () => {
+      const requests = await getUserRequests();
+      setUserRequests(requests);
+    };
+
+    fetchUserRequests();
+  }, [getUserRequests]);
+
+  const handleRequestAction = async (requestId: string, action: 'approved' | 'rejected') => {
+    await updateRequestStatus(requestId, action);
+    // Refresh user requests after action
+    const updatedRequests = await getUserRequests();
+    setUserRequests(updatedRequests);
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const addInterest = () => {
-    if (newInterest && !formData.interests.includes(newInterest)) {
-      setFormData(prev => ({
-        ...prev,
-        interests: [...prev.interests, newInterest]
-      }));
-      setNewInterest("");
-    }
-  };
-
-  const removeInterest = (interest: string) => {
-    setFormData(prev => ({
-      ...prev,
-      interests: prev.interests.filter(i => i !== interest)
-    }));
-  };
-
-  const addLanguage = () => {
-    if (newLanguage && !formData.languages.includes(newLanguage)) {
-      setFormData(prev => ({
-        ...prev,
-        languages: [...prev.languages, newLanguage]
-      }));
-      setNewLanguage("");
-    }
-  };
-
-  const removeLanguage = (language: string) => {
-    setFormData(prev => ({
-      ...prev,
-      languages: prev.languages.filter(l => l !== language)
-    }));
-  };
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    
-    const file = e.target.files[0];
-    const fileSize = file.size / 1024 / 1024; // size in MB
-    
-    if (fileSize > 2) {
-      toast({
-        title: "File too large",
-        description: "Please select an image smaller than 2MB",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    setUploadingAvatar(true);
-    
-    try {
-      await uploadAvatar(file);
-    } finally {
-      setUploadingAvatar(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isCurrentUser) return;
-    
-    try {
-      const updates = {
-        ...formData,
-        age: formData.age ? parseInt(formData.age) : null,
-        updated_at: new Date().toISOString()
-      };
-      
-      await updateProfile(updates);
-      setIsEditing(false);
-    } catch (error) {
-      console.error("Error updating profile:", error);
-    }
-  };
-
-  if (isLoading || isProfileLoading) {
-    return (
-      <Layout>
-        <div className="container mx-auto px-4 py-20 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-triplink-blue mx-auto"></div>
-          <p className="mt-4">Loading profile...</p>
-        </div>
-      </Layout>
-    );
-  }
-
-  const displayProfile = isCurrentUser ? profile : viewedProfile;
-
-  if (!displayProfile) {
-    return (
-      <Layout>
-        <div className="container mx-auto px-4 py-20 text-center">
-          <h1 className="text-3xl font-bold mb-4">Profile not found</h1>
-          <p className="mb-8">The user you're looking for doesn't exist or has been removed.</p>
-          <Button onClick={() => navigate("/")}>Back to Home</Button>
-        </div>
-      </Layout>
-    );
+  if (!profile) {
+    return <div>Loading profile...</div>;
   }
 
   return (
-    <Layout>
-      <div className="container mx-auto px-4 py-12">
-        <Card className="mb-8">
-          <CardHeader className="relative pb-0">
-            {isCurrentUser && (
-              <div className="absolute top-4 right-4 flex gap-2">
-                {isEditing ? (
-                  <Button 
-                    onClick={() => setIsEditing(false)} 
-                    variant="outline"
-                    size="sm"
-                  >
-                    Cancel
-                  </Button>
-                ) : (
-                  <Button 
-                    onClick={() => setIsEditing(true)} 
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center gap-1"
-                  >
-                    <Edit className="h-4 w-4" /> Edit Profile
-                  </Button>
-                )}
-              </div>
+    <div className="container mx-auto py-8">
+      <Card className="max-w-md mx-auto">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold">
+            {profile.full_name || profile.username || "User Profile"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center">
+          <Avatar className="h-32 w-32 rounded-full border-2 border-triplink-teal">
+            <AvatarImage src={profile.avatar_url} alt={profile.full_name || profile.username || "Avatar"} />
+            <AvatarFallback>{profile.username?.charAt(0).toUpperCase() || 'U'}</AvatarFallback>
+          </Avatar>
+          <div className="mt-4 text-center">
+            <p className="text-gray-700">Username: {profile.username}</p>
+            <p className="text-gray-700">Full Name: {profile.full_name || "N/A"}</p>
+            {isCurrentUserProfile && (
+              <p className="text-sm text-gray-500">
+                Profile last updated: {profile.updated_at ? new Date(profile.updated_at).toLocaleDateString() : "N/A"}
+              </p>
             )}
+          </div>
+        </CardContent>
+      </Card>
 
-            <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-              <div className="relative">
-                <Avatar className="h-24 w-24">
-                  <AvatarImage src={displayProfile.avatar_url || undefined} />
-                  <AvatarFallback className="text-2xl">
-                    {displayProfile.full_name ? displayProfile.full_name.charAt(0).toUpperCase() : "U"}
-                  </AvatarFallback>
-                </Avatar>
-                {isCurrentUser && isEditing && (
-                  <div className="absolute bottom-0 right-0">
-                    <label 
-                      htmlFor="avatar-upload" 
-                      className="rounded-full bg-triplink-teal p-2 text-white cursor-pointer hover:bg-triplink-darkBlue"
-                    >
-                      {uploadingAvatar ? (
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-t-transparent" />
-                      ) : (
-                        <Upload className="h-4 w-4" />
-                      )}
-                    </label>
-                    <input 
-                      id="avatar-upload" 
-                      type="file" 
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleAvatarUpload}
-                      disabled={uploadingAvatar}
-                    />
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex-1">
-                <CardTitle className="text-2xl">
-                  {isEditing ? (
-                    <Input 
-                      name="full_name"
-                      value={formData.full_name}
-                      onChange={handleChange}
-                      className="text-2xl font-bold"
-                      placeholder="Your name"
-                    />
-                  ) : (
-                    displayProfile.full_name || "Unnamed Traveler"
-                  )}
-                </CardTitle>
-                
-                {isEditing ? (
-                  <div className="mt-2">
-                    <Label htmlFor="username" className="text-sm text-gray-500">Username</Label>
-                    <div className="flex items-center">
-                      <span className="text-gray-500 mr-1">@</span>
-                      <Input 
-                        id="username"
-                        name="username"
-                        value={formData.username || ""}
-                        onChange={handleChange}
-                        className="text-sm"
-                        placeholder="username"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  displayProfile.username && (
-                    <CardDescription className="mt-1">
-                      @{displayProfile.username}
-                    </CardDescription>
-                  )
-                )}
-                
-                <div className="flex flex-wrap gap-4 mt-3">
-                  {isEditing ? (
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-gray-500" />
-                      <Input 
-                        name="location"
-                        value={formData.location || ""}
-                        onChange={handleChange}
-                        className="text-sm"
-                        placeholder="Your location"
-                      />
-                    </div>
-                  ) : (
-                    displayProfile.location && (
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <MapPin className="h-4 w-4 text-triplink-teal" />
-                        <span>{displayProfile.location}</span>
-                      </div>
-                    )
-                  )}
-                  
-                  {isEditing ? (
-                    <div className="flex items-center gap-2">
-                      <CalendarIcon className="h-4 w-4 text-gray-500" />
-                      <Input 
-                        name="age"
-                        type="number"
-                        value={formData.age || ""}
-                        onChange={handleChange}
-                        className="text-sm w-24"
-                        placeholder="Age"
-                      />
-                    </div>
-                  ) : (
-                    displayProfile.age && (
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <CalendarIcon className="h-4 w-4 text-triplink-teal" />
-                        <span>{displayProfile.age} years old</span>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-            </div>
-          </CardHeader>
-
-          <CardContent className="pt-6">
-            {isEditing ? (
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="bio">Bio</Label>
-                  <Textarea
-                    id="bio"
-                    name="bio"
-                    value={formData.bio || ""}
-                    onChange={handleChange}
-                    placeholder="Tell us about yourself and your travel style..."
-                    rows={4}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="gender">Gender</Label>
-                  <Input
-                    id="gender"
-                    name="gender"
-                    value={formData.gender || ""}
-                    onChange={handleChange}
-                    placeholder="Male, Female, Non-binary, etc."
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Interests</Label>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {formData.interests.map((interest, index) => (
-                      <Badge key={index} variant="secondary" className="flex items-center gap-1">
-                        {interest}
-                        <button
-                          type="button"
-                          className="ml-1 text-gray-500 hover:text-gray-700"
-                          onClick={() => removeInterest(interest)}
-                        >
-                          ×
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                  <div className="flex gap-2">
-                    <Input
-                      value={newInterest}
-                      onChange={(e) => setNewInterest(e.target.value)}
-                      placeholder="Add interest (e.g. Hiking, Photography)"
-                    />
-                    <Button type="button" onClick={addInterest} variant="outline">Add</Button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Languages</Label>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {formData.languages.map((language, index) => (
-                      <Badge key={index} variant="outline" className="flex items-center gap-1">
-                        {language}
-                        <button
-                          type="button"
-                          className="ml-1 text-gray-500 hover:text-gray-700"
-                          onClick={() => removeLanguage(language)}
-                        >
-                          ×
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                  <div className="flex gap-2">
-                    <Input
-                      value={newLanguage}
-                      onChange={(e) => setNewLanguage(e.target.value)}
-                      placeholder="Add language (e.g. English, Spanish)"
-                    />
-                    <Button type="button" onClick={addLanguage} variant="outline">Add</Button>
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button type="submit" className="bg-triplink-teal hover:bg-triplink-darkBlue flex items-center gap-1">
-                    <Save className="h-4 w-4" /> Save Changes
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              <div className="space-y-6">
-                {displayProfile.bio && (
-                  <div>
-                    <h3 className="text-lg font-medium mb-2">About</h3>
-                    <p className="text-gray-600">{displayProfile.bio}</p>
-                  </div>
-                )}
-                
-                <Separator />
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {displayProfile.interests && displayProfile.interests.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-medium mb-3">Interests</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {displayProfile.interests.map((interest, index) => (
-                          <Badge key={index} variant="secondary" className="bg-triplink-lightBlue text-triplink-darkBlue">
-                            {interest}
-                          </Badge>
-                        ))}
-                      </div>
+      {isCurrentUserProfile && (
+        <div className="mt-8">
+          <h2 className="text-2xl font-bold mb-4">Your Trip Requests</h2>
+          {userRequests.length > 0 ? (
+            userRequests.map((request) => (
+              <Card key={request.id} className="mb-4">
+                <CardContent>
+                  <CardTitle>{request.trips?.title}</CardTitle>
+                  <p>Destination: {request.trips?.destination}</p>
+                  <p>Message: {request.message}</p>
+                  <p>Status: {request.status}</p>
+                  {request.status === 'pending' && (
+                    <div className="flex justify-end space-x-2">
+                      <Button variant="secondary" onClick={() => handleRequestAction(request.id, 'approved')}>
+                        Approve
+                      </Button>
+                      <Button variant="destructive" onClick={() => handleRequestAction(request.id, 'rejected')}>
+                        Reject
+                      </Button>
                     </div>
                   )}
-                  
-                  {displayProfile.languages && displayProfile.languages.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-medium mb-3">Languages</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {displayProfile.languages.map((language, index) => (
-                          <Badge key={index} variant="outline">
-                            {language}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Tabs defaultValue="trips">
-          <TabsList className="mb-8">
-            <TabsTrigger value="trips">Trips</TabsTrigger>
-            <TabsTrigger value="reviews">Reviews</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="trips">
-            <div className="text-center py-16">
-              <Globe className="mx-auto h-12 w-12 text-gray-300" />
-              <h3 className="text-xl font-medium mt-4 mb-2">No trips yet</h3>
-              {isCurrentUser ? (
-                <>
-                  <p className="text-gray-500 mb-6">Create your first trip and find travel companions</p>
-                  <Button onClick={() => navigate("/create-trip")} className="bg-triplink-teal hover:bg-triplink-darkBlue">
-                    Create a Trip
-                  </Button>
-                </>
-              ) : (
-                <p className="text-gray-500">This user hasn't created any trips yet</p>
-              )}
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="reviews">
-            <div className="text-center py-16">
-              <h3 className="text-xl font-medium mb-2">No reviews yet</h3>
-              <p className="text-gray-500">Reviews will appear here after traveling with others</p>
-            </div>
-          </TabsContent>
-        </Tabs>
-      </div>
-    </Layout>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <p>No trip requests found.</p>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
 

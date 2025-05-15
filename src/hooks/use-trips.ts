@@ -43,7 +43,9 @@ export function useTrips() {
         throw error;
       }
 
-      setTrips(data || []);
+      // Cast the data to ensure it matches our Trip interface
+      const typedData = data as Trip[];
+      setTrips(typedData || []);
     } catch (error: any) {
       console.error("Error fetching trips:", error);
       setError(error.message);
@@ -64,7 +66,7 @@ export function useTrips() {
         throw error;
       }
 
-      return data;
+      return data as Trip;
     } catch (error: any) {
       console.error("Error fetching trip:", error);
       toast({
@@ -80,7 +82,7 @@ export function useTrips() {
     try {
       const { data, error } = await supabase
         .from("trips")
-        .insert([tripData])
+        .insert([{ ...tripData, user_id: supabase.auth.getUser().then(res => res.data.user?.id) }])
         .select()
         .single();
 
@@ -88,14 +90,14 @@ export function useTrips() {
         throw error;
       }
 
-      setTrips((prevTrips) => [data, ...prevTrips]);
+      setTrips((prevTrips) => [data as Trip, ...prevTrips]);
 
       toast({
         title: "Trip created",
         description: "Your trip has been created successfully",
       });
 
-      return data;
+      return data as Trip;
     } catch (error: any) {
       console.error("Error creating trip:", error);
       
@@ -123,7 +125,7 @@ export function useTrips() {
       }
 
       setTrips((prevTrips) =>
-        prevTrips.map((trip) => (trip.id === id ? { ...trip, ...data } : trip))
+        prevTrips.map((trip) => (trip.id === id ? { ...trip, ...data } as Trip : trip))
       );
 
       toast({
@@ -131,7 +133,7 @@ export function useTrips() {
         description: "Your trip has been updated successfully",
       });
 
-      return data;
+      return data as Trip;
     } catch (error: any) {
       console.error("Error updating trip:", error);
       
