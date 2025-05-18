@@ -22,24 +22,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Set up auth state listener FIRST
+    // Set up auth state listener FIRST to ensure we catch all auth events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === "SIGNED_OUT") {
-          setSession(null);
-          setUser(null);
-        } else if (session) {
-          setSession(session);
-          setUser(session.user);
-        }
+      (event, currentSession) => {
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        setIsLoading(false); // Update loading state after auth state change
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setIsLoading(false);
+    // THEN check for existing session - this prevents flickering during initial load
+    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+      setIsLoading(false); // Update loading state after session check
     });
 
     return () => {
@@ -98,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     try {
+      setIsLoading(true); // Set loading state when signing out
       const { error } = await supabase.auth.signOut();
       
       if (error) throw error;
@@ -112,6 +109,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: error.message,
         variant: "destructive"
       });
+    } finally {
+      setIsLoading(false); // Reset loading state regardless of outcome
     }
   }
 

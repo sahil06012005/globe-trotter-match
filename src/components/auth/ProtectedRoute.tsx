@@ -1,6 +1,7 @@
 
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { useEffect, useState } from "react";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -9,8 +10,16 @@ interface ProtectedRouteProps {
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { user, isLoading } = useAuth();
   const location = useLocation();
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  
+  useEffect(() => {
+    // Only update the authentication state when isLoading is false
+    if (!isLoading) {
+      setIsAuthenticated(!!user);
+    }
+  }, [user, isLoading]);
 
-  if (isLoading) {
+  if (isLoading || isAuthenticated === null) {
     // Show loading spinner while checking authentication
     return (
       <div className="flex items-center justify-center h-screen">
@@ -19,8 +28,8 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     );
   }
 
-  if (!user) {
-    // Only redirect to login if the user is not authenticated and not already on the login page
+  if (!isAuthenticated) {
+    // Only redirect to login if the user is not authenticated
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 
