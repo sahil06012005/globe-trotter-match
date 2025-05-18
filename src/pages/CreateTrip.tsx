@@ -50,16 +50,24 @@ const formSchema = z.object({
     message: "End date is required",
   }),
   budget: z.string().min(1, "Budget is required"),
-  maxTravelers: z.string().transform(val => parseInt(val, 10)),
+  maxTravelers: z.coerce.number().min(1, "Must allow at least 1 traveler"),
+  interests: z.array(z.string()).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
+
+const interests = [
+  "Adventure", "Nature", "Culture", "Food", "History", 
+  "Photography", "Beaches", "Hiking", "Art", "Nightlife", 
+  "Relaxation", "Shopping", "Wildlife", "Architecture", "Music"
+];
 
 const CreateTrip = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -68,9 +76,28 @@ const CreateTrip = () => {
       destination: "",
       description: "",
       budget: "",
-      maxTravelers: "2"
+      maxTravelers: 2,
+      interests: [],
     },
   });
+
+  const handleInterestToggle = (interest: string) => {
+    setSelectedInterests(prev => {
+      if (prev.includes(interest)) {
+        return prev.filter(i => i !== interest);
+      } else {
+        return [...prev, interest];
+      }
+    });
+    
+    // Update form value
+    const currentInterests = form.getValues("interests") || [];
+    if (currentInterests.includes(interest)) {
+      form.setValue("interests", currentInterests.filter(i => i !== interest));
+    } else {
+      form.setValue("interests", [...currentInterests, interest]);
+    }
+  };
 
   const onSubmit = async (values: FormValues) => {
     if (!user) {
@@ -96,6 +123,7 @@ const CreateTrip = () => {
         max_travelers: values.maxTravelers,
         user_id: user.id,
         status: 'planning',
+        interests: values.interests || [],
       };
 
       // Insert trip into database
@@ -299,7 +327,10 @@ const CreateTrip = () => {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Maximum Travelers</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select 
+                          onValueChange={(value) => field.onChange(parseInt(value))} 
+                          defaultValue={field.value.toString()}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select max travelers" />
@@ -321,6 +352,35 @@ const CreateTrip = () => {
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name="interests"
+                  render={() => (
+                    <FormItem>
+                      <FormLabel>Trip Interests</FormLabel>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {interests.map((interest) => (
+                          <Button
+                            key={interest}
+                            type="button"
+                            variant={selectedInterests.includes(interest) ? "default" : "outline"}
+                            className={`rounded-full text-sm py-1 px-3 h-auto ${
+                              selectedInterests.includes(interest) ? "bg-triplink-teal" : ""
+                            }`}
+                            onClick={() => handleInterestToggle(interest)}
+                          >
+                            {interest}
+                          </Button>
+                        ))}
+                      </div>
+                      <FormDescription>
+                        Select interests that match your trip plans.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <div className="pt-4 flex justify-end">
                   <Button type="submit" disabled={isSubmitting} className="w-full md:w-auto">

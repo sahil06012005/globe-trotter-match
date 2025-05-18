@@ -1,172 +1,225 @@
 
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { useMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/context/AuthContext';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { useToast } from "@/hooks/use-toast";
-import { 
-  Menu, 
-  X, 
-  User, 
-  Globe, 
-  MessageSquare, 
-  Plus,
-  LogOut 
-} from "lucide-react";
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { PlusCircle, Menu, X, MessageSquare } from 'lucide-react';
 
 const Navbar = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const { toast } = useToast();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [transparent, setTransparent] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isMobile = useMobile();
+  const { user, signOut } = useAuth();
 
-  const toggleMenu = () => setIsOpen(!isOpen);
-  
-  const handleLogout = () => {
-    toast({
-      title: "Logged out successfully",
-      description: "See you again soon!",
-    });
-    // In a real app, we'd handle authentication state here
+  const isHomePage = location.pathname === '/';
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (isHomePage) {
+        const scrollTop = window.scrollY;
+        setTransparent(scrollTop < 100);
+      } else {
+        setTransparent(false);
+      }
+    };
+
+    handleScroll();
+    window.addEventListener('scroll', handleScroll);
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [isHomePage]);
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/');
   };
 
-  // Mock authenticated state - in a real app, this would come from auth context
-  const isAuthenticated = true;
+  const toggleMobileMenu = () => setMobileMenuOpen(!mobileMenuOpen);
+  const closeMobileMenu = () => setMobileMenuOpen(false);
+
+  const navbarClasses = `fixed top-0 left-0 right-0 z-50 ${
+    isHomePage && transparent
+      ? 'bg-transparent text-white'
+      : 'bg-white border-b shadow-sm text-gray-800'
+  } transition-all duration-300`;
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-white shadow-sm">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4">
-        <Link to="/" className="flex items-center gap-2">
-          <Globe className="h-6 w-6 text-triplink-blue" />
-          <span className="text-2xl font-bold text-triplink-blue">TripLink</span>
-        </Link>
+    <nav className={navbarClasses}>
+      <div className="container mx-auto px-4">
+        <div className="flex justify-between items-center h-16">
+          {/* Logo */}
+          <Link to="/" className="font-bold text-2xl">
+            TripLink
+          </Link>
 
-        {/* Desktop Navigation */}
-        <nav className="hidden items-center gap-6 md:flex">
-          <Link to="/explore" className="text-gray-600 hover:text-triplink-blue transition-colors">
-            Explore
-          </Link>
-          <Link to="/how-it-works" className="text-gray-600 hover:text-triplink-blue transition-colors">
-            How It Works
-          </Link>
-          
-          {isAuthenticated ? (
-            <>
-              <Link to="/trips/new" className="text-gray-600 hover:text-triplink-blue transition-colors">
-                Post Trip
-              </Link>
+          {/* Desktop Menu */}
+          <div className="hidden md:flex items-center space-x-6">
+            <Link
+              to="/explore"
+              className="font-medium hover:text-triplink-teal transition-colors"
+            >
+              Explore
+            </Link>
+            {user && (
+              <>
+                <Link
+                  to="/messages"
+                  className="font-medium hover:text-triplink-teal transition-colors flex items-center"
+                >
+                  <MessageSquare className="mr-1 h-4 w-4" />
+                  Messages
+                </Link>
+                <Button variant="outline" asChild>
+                  <Link to="/create-trip" className="flex items-center">
+                    <PlusCircle className="mr-2 h-4 w-4" /> Create Trip
+                  </Link>
+                </Button>
+              </>
+            )}
+            {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="icon"
-                    className="rounded-full h-10 w-10 border-2 border-triplink-teal bg-triplink-lightBlue"
+                    className="p-0 h-10 w-10 rounded-full"
                   >
-                    <User className="h-5 w-5 text-triplink-darkBlue" />
+                    <Avatar>
+                      <AvatarImage src={user.user_metadata?.avatar_url} />
+                      <AvatarFallback>
+                        {(user.user_metadata?.full_name?.[0] ||
+                          user.email?.[0] ||
+                          'U').toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>
+                    {user.user_metadata?.full_name || user.email}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link to="/profile" className="flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      <span>Profile</span>
-                    </Link>
+                    <Link to={`/profile/${user.id}`}>Your Profile</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link to="/messages" className="flex items-center gap-2">
-                      <MessageSquare className="h-4 w-4" />
-                      <span>Messages</span>
-                    </Link>
+                    <Link to="/messages">Messages</Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/trips/new" className="flex items-center gap-2">
-                      <Plus className="h-4 w-4" />
-                      <span>Post Trip</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleLogout} className="flex items-center gap-2 text-destructive focus:text-destructive">
-                    <LogOut className="h-4 w-4" />
-                    <span>Logout</span>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleSignOut}>
+                    Sign out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </>
-          ) : (
-            <>
-              <Link to="/login">
-                <Button variant="outline" className="border-triplink-teal text-triplink-teal hover:bg-triplink-teal hover:text-white">
-                  Login
+            ) : (
+              <div className="flex items-center space-x-3">
+                <Button variant="ghost" asChild>
+                  <Link to="/login">Login</Link>
                 </Button>
-              </Link>
-              <Link to="/register">
-                <Button className="bg-triplink-teal hover:bg-triplink-darkBlue">Sign Up</Button>
-              </Link>
-            </>
-          )}
-        </nav>
+                <Button asChild>
+                  <Link to="/register">Sign Up</Link>
+                </Button>
+              </div>
+            )}
+          </div>
 
-        {/* Mobile Menu Button */}
-        <button className="md:hidden" onClick={toggleMenu}>
-          {isOpen ? <X /> : <Menu />}
-        </button>
+          {/* Mobile Menu Toggle */}
+          <div className="md:hidden">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleMobileMenu}
+              className="text-current"
+            >
+              {mobileMenuOpen ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Menu className="h-6 w-6" />
+              )}
+            </Button>
+          </div>
+        </div>
       </div>
 
-      {/* Mobile Menu */}
-      {isOpen && (
-        <div className="md:hidden border-t">
-          <div className="flex flex-col p-4 space-y-4">
-            <Link to="/explore" className="px-3 py-2 hover:bg-gray-100 rounded" onClick={toggleMenu}>
-              Explore
-            </Link>
-            <Link to="/how-it-works" className="px-3 py-2 hover:bg-gray-100 rounded" onClick={toggleMenu}>
-              How It Works
-            </Link>
-            
-            {isAuthenticated ? (
-              <>
-                <Link to="/profile" className="px-3 py-2 hover:bg-gray-100 rounded" onClick={toggleMenu}>
-                  Profile
-                </Link>
-                <Link to="/messages" className="px-3 py-2 hover:bg-gray-100 rounded" onClick={toggleMenu}>
-                  Messages
-                </Link>
-                <Link to="/trips/new" className="px-3 py-2 hover:bg-gray-100 rounded" onClick={toggleMenu}>
-                  Post Trip
-                </Link>
-                <button 
-                  onClick={() => {
-                    handleLogout();
-                    toggleMenu();
-                  }}
-                  className="px-3 py-2 hover:bg-red-50 text-red-600 rounded text-left"
-                >
-                  Logout
-                </button>
-              </>
-            ) : (
-              <>
-                <Link to="/login" onClick={toggleMenu}>
-                  <Button 
-                    variant="outline" 
-                    className="w-full border-triplink-teal text-triplink-teal hover:bg-triplink-teal hover:text-white"
+      {/* Mobile Menu Drawer */}
+      {isMobile && mobileMenuOpen && (
+        <div className="md:hidden bg-white shadow-lg pt-2 pb-6 border-b">
+          <div className="container mx-auto px-4">
+            <div className="flex flex-col space-y-4">
+              <Link
+                to="/explore"
+                className="font-medium py-2"
+                onClick={closeMobileMenu}
+              >
+                Explore
+              </Link>
+              {user && (
+                <>
+                  <Link
+                    to="/messages"
+                    className="font-medium py-2 flex items-center"
+                    onClick={closeMobileMenu}
                   >
-                    Login
+                    <MessageSquare className="mr-2 h-4 w-4" /> Messages
+                  </Link>
+                  <Link
+                    to="/create-trip"
+                    className="font-medium py-2 flex items-center"
+                    onClick={closeMobileMenu}
+                  >
+                    <PlusCircle className="mr-2 h-4 w-4" /> Create Trip
+                  </Link>
+                  <Link
+                    to={`/profile/${user.id}`}
+                    className="font-medium py-2"
+                    onClick={closeMobileMenu}
+                  >
+                    Your Profile
+                  </Link>
+                  <Button 
+                    variant="destructive" 
+                    onClick={() => {
+                      handleSignOut();
+                      closeMobileMenu();
+                    }}
+                    className="mt-2"
+                  >
+                    Sign out
                   </Button>
-                </Link>
-                <Link to="/register" onClick={toggleMenu}>
-                  <Button className="w-full bg-triplink-teal hover:bg-triplink-darkBlue">
-                    Sign Up
+                </>
+              )}
+              {!user && (
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <Button variant="outline" asChild>
+                    <Link to="/login" onClick={closeMobileMenu}>
+                      Login
+                    </Link>
                   </Button>
-                </Link>
-              </>
-            )}
+                  <Button asChild>
+                    <Link to="/register" onClick={closeMobileMenu}>
+                      Sign Up
+                    </Link>
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
-    </header>
+    </nav>
   );
 };
 

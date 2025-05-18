@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import Explore from "./pages/Explore";
 import TripDetails from "./pages/TripDetails";
 import CreateTrip from "./pages/CreateTrip";
+import Messages from "./pages/Messages";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -46,6 +47,11 @@ const App = () => (
             <Route path="/profile/:id" element={
               <ProtectedRoute>
                 <Profile />
+              </ProtectedRoute>
+            } />
+            <Route path="/messages" element={
+              <ProtectedRoute>
+                <Messages />
               </ProtectedRoute>
             } />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

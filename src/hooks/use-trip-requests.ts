@@ -1,189 +1,217 @@
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 export interface TripRequest {
   id: string;
   trip_id: string;
   user_id: string;
+  status: "pending" | "approved" | "rejected";
   message: string | null;
-  status: 'pending' | 'approved' | 'rejected';
-  created_at: string;
-  updated_at: string;
+  created_at: string | null;
+  updated_at: string | null;
   trips?: {
     id: string;
     title: string;
     destination: string;
-    image_url: string | null;
+    user_id: string;
   };
 }
 
-export function useTripRequests() {
+export const useTripRequests = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  async function getRequestsForTrip(tripId: string) {
-    try {
+  // Get requests for a trip (as the trip owner)
+  const getTripRequests = useCallback(
+    async (tripId: string): Promise<TripRequest[]> => {
+      if (!user) return [];
+
       setIsLoading(true);
-      
-      const { data, error } = await supabase
-        .from("trip_requests")
-        .select("*, profiles(id, username, full_name, avatar_url)")
-        .eq("trip_id", tripId);
+      try {
+        const { data, error } = await supabase
+          .from("trip_requests")
+          .select(
+            `
+            *,
+            trips:trip_id (
+              id,
+              title,
+              destination,
+              user_id
+            )
+          `
+          )
+          .eq("trip_id", tripId);
 
-      if (error) {
-        throw error;
+        if (error) {
+          throw error;
+        }
+
+        return data as TripRequest[] || [];
+      } catch (error: any) {
+        console.error("Error fetching trip requests:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load trip requests",
+          variant: "destructive",
+        });
+        return [];
+      } finally {
+        setIsLoading(false);
       }
+    },
+    [user, toast]
+  );
 
-      return data || [];
-    } catch (error: any) {
-      console.error("Error fetching trip requests:", error);
-      toast({
-        title: "Error loading requests",
-        description: error.message,
-        variant: "destructive",
-      });
-      return [];
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  async function getUserRequests() {
+  // Get requests from a user (their sent requests)
+  const getUserRequests = useCallback(async (): Promise<TripRequest[]> => {
     if (!user) return [];
-    
+
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      
       const { data, error } = await supabase
         .from("trip_requests")
-        .select("*, trips(id, title, destination, image_url)")
+        .select(
+          `
+          *,
+          trips:trip_id (
+            id,
+            title,
+            destination,
+            user_id
+          )
+        `
+        )
         .eq("user_id", user.id);
 
       if (error) {
         throw error;
       }
 
-      // Cast the data to ensure it matches our TripRequest interface
       return data as TripRequest[] || [];
     } catch (error: any) {
       console.error("Error fetching user requests:", error);
       toast({
-        title: "Error loading your requests",
-        description: error.message,
+        title: "Error",
+        description: "Failed to load your trip requests",
         variant: "destructive",
       });
       return [];
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [user, toast]);
 
-  async function createRequest(tripId: string, message: string) {
-    if (!user) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to send a request",
-        variant: "destructive",
-      });
-      return null;
-    }
-    
-    try {
-      setIsLoading(true);
-      
-      const { data, error } = await supabase
-        .from("trip_requests")
-        .insert([
-          { trip_id: tripId, user_id: user.id, message: message }
-        ])
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      toast({
-        title: "Request sent",
-        description: "Your request to join this trip has been sent",
-      });
-
-      return data;
-    } catch (error: any) {
-      console.error("Error creating trip request:", error);
-      
-      if (error.code === '23505') {
+  // Send a request to join a trip
+  const sendTripRequest = useCallback(
+    async (tripId: string, message: string) => {
+      if (!user) {
         toast({
-          title: "Request already sent",
-          description: "You've already sent a request to join this trip",
+          title: "Error",
+          description: "You must be logged in to send trip requests",
           variant: "destructive",
         });
-      } else {
+        return false;
+      }
+
+      setIsLoading(true);
+      try {
+        // Check if request already exists
+        const { data: existingRequest } = await supabase
+          .from("trip_requests")
+          .select("*")
+          .eq("trip_id", tripId)
+          .eq("user_id", user.id)
+          .single();
+
+        if (existingRequest) {
+          toast({
+            title: "Request exists",
+            description: "You have already sent a request for this trip",
+          });
+          return false;
+        }
+
+        const { error } = await supabase.from("trip_requests").insert([
+          {
+            trip_id: tripId,
+            user_id: user.id,
+            message,
+            status: "pending",
+          },
+        ]);
+
+        if (error) {
+          throw error;
+        }
+
         toast({
-          title: "Error sending request",
-          description: error.message,
+          title: "Request sent",
+          description: "Your request to join the trip has been sent",
+        });
+
+        return true;
+      } catch (error: any) {
+        console.error("Error sending trip request:", error);
+        toast({
+          title: "Error",
+          description: "Failed to send trip request",
           variant: "destructive",
         });
+        return false;
+      } finally {
+        setIsLoading(false);
       }
-      
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  }
+    },
+    [user, toast]
+  );
 
-  async function updateRequestStatus(requestId: string, status: 'approved' | 'rejected') {
-    try {
+  // Update request status (approve/reject)
+  const updateRequestStatus = useCallback(
+    async (requestId: string, status: "approved" | "rejected") => {
+      if (!user) return false;
+
       setIsLoading(true);
-      
-      const { data, error } = await supabase
-        .from("trip_requests")
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq("id", requestId)
-        .select()
-        .single();
+      try {
+        const { error } = await supabase
+          .from("trip_requests")
+          .update({ status, updated_at: new Date().toISOString() })
+          .eq("id", requestId);
 
-      if (error) {
-        throw error;
+        if (error) {
+          throw error;
+        }
+
+        toast({
+          title: `Request ${status}`,
+          description: `The trip request has been ${status}`,
+        });
+
+        return true;
+      } catch (error: any) {
+        console.error("Error updating request status:", error);
+        toast({
+          title: "Error",
+          description: "Failed to update request status",
+          variant: "destructive",
+        });
+        return false;
+      } finally {
+        setIsLoading(false);
       }
-
-      // If approved, update the current_travelers count on the trip
-      if (status === 'approved') {
-        const tripId = data.trip_id;
-        
-        await supabase.rpc('increment_trip_travelers', { trip_id: tripId });
-      }
-
-      toast({
-        title: `Request ${status}`,
-        description: `The request has been ${status}`,
-      });
-
-      return data;
-    } catch (error: any) {
-      console.error("Error updating trip request:", error);
-      
-      toast({
-        title: "Error updating request",
-        description: error.message,
-        variant: "destructive",
-      });
-      
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  }
+    },
+    [user, toast]
+  );
 
   return {
     isLoading,
-    getRequestsForTrip,
+    getTripRequests,
     getUserRequests,
-    createRequest,
+    sendTripRequest,
     updateRequestStatus,
   };
-}
+};
