@@ -1,5 +1,5 @@
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -177,13 +177,40 @@ export const useTripRequests = () => {
 
       setIsLoading(true);
       try {
+        // First, get the request to check trip details
+        const { data: request, error: requestError } = await supabase
+          .from("trip_requests")
+          .select("*, trips:trip_id (*)")
+          .eq("id", requestId)
+          .single();
+
+        if (requestError) throw requestError;
+        
+        if (!request) {
+          throw new Error("Request not found");
+        }
+
+        // Update the request status
         const { error } = await supabase
           .from("trip_requests")
           .update({ status, updated_at: new Date().toISOString() })
           .eq("id", requestId);
 
-        if (error) {
-          throw error;
+        if (error) throw error;
+
+        // If approved, increment the current_travelers count
+        if (status === "approved") {
+          const { error: tripError } = await supabase
+            .from("trips")
+            .update({ 
+              current_travelers: (request.trips?.current_travelers || 1) + 1 
+            })
+            .eq("id", request.trip_id);
+
+          if (tripError) {
+            console.error("Error updating trip travelers count:", tripError);
+            // Don't throw here, as the request status was already updated
+          }
         }
 
         toast({

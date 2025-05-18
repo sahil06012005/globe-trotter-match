@@ -1,19 +1,14 @@
 
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Calendar } from "lucide-react";
-import { format } from "date-fns";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/context/AuthContext";
-import { useToast } from "@/hooks/use-toast";
-import Layout from "@/components/layout/Layout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import Layout from '@/components/layout/Layout';
 import {
   Form,
   FormControl,
@@ -22,375 +17,459 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import {
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { 
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
+import { 
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Badge } from '@/components/ui/badge';
+import { CalendarIcon, Globe, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-const formSchema = z.object({
-  title: z.string().min(3, "Title must be at least 3 characters"),
-  destination: z.string().min(2, "Destination is required"),
-  description: z.string().optional(),
+// Available interests for trips
+const availableInterests = [
+  'Adventure', 'Art', 'Beach', 'Camping', 'City Exploration',
+  'Culture', 'Cuisine', 'Diving', 'Festivals', 'Hiking',
+  'History', 'Local Experience', 'Luxury', 'Mountains', 'Museums',
+  'Music', 'Nature', 'Nightlife', 'Photography', 'Relaxation',
+  'Road Trip', 'Shopping', 'Sightseeing', 'Solo Travel', 'Sports',
+  'Study', 'Trekking', 'Volunteering', 'Wellness', 'Wildlife',
+  'Winter Sports', 'Work Retreat', 'Yoga'
+];
+
+// Budget options
+const budgetOptions = [
+  'Budget',
+  'Mid-range',
+  'Mid-range to High',
+  'Mid-range to Luxury',
+  'Luxury'
+];
+
+// Form schema definition
+const tripFormSchema = z.object({
+  title: z.string().min(5, 'Title must be at least 5 characters'),
+  destination: z.string().min(3, 'Destination must be at least 3 characters'),
+  description: z.string().min(20, 'Description must be at least 20 characters'),
   startDate: z.date({
     required_error: "Start date is required",
   }),
   endDate: z.date({
     required_error: "End date is required",
-  }).refine(date => date instanceof Date, {
-    message: "End date is required",
   }),
-  budget: z.string().min(1, "Budget is required"),
-  maxTravelers: z.coerce.number().min(1, "Must allow at least 1 traveler"),
-  interests: z.array(z.string()).optional(),
+  maxTravelers: z.coerce
+    .number()
+    .min(2, 'Need at least 2 travelers')
+    .max(20, 'Maximum 20 travelers allowed'),
+  budget: z.string({
+    required_error: "Budget category is required",
+  }),
+  interests: z.array(z.string()).min(1, 'Select at least one interest'),
 });
 
-type FormValues = z.infer<typeof formSchema>;
-
-const interests = [
-  "Adventure", "Nature", "Culture", "Food", "History", 
-  "Photography", "Beaches", "Hiking", "Art", "Nightlife", 
-  "Relaxation", "Shopping", "Wildlife", "Architecture", "Music"
-];
+type TripFormValues = z.infer<typeof tripFormSchema>;
 
 const CreateTrip = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
-
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+  const [isLoading, setIsLoading] = useState(false);
+  const [interestSearch, setInterestSearch] = useState('');
+  
+  // Initialize form
+  const form = useForm<TripFormValues>({
+    resolver: zodResolver(tripFormSchema),
     defaultValues: {
-      title: "",
-      destination: "",
-      description: "",
-      budget: "",
+      title: '',
+      destination: '',
+      description: '',
       maxTravelers: 2,
+      budget: '',
       interests: [],
     },
   });
-
-  const handleInterestToggle = (interest: string) => {
-    setSelectedInterests(prev => {
-      if (prev.includes(interest)) {
-        return prev.filter(i => i !== interest);
-      } else {
-        return [...prev, interest];
-      }
-    });
-    
-    // Update form value
-    const currentInterests = form.getValues("interests") || [];
+  
+  // Filter interests based on search
+  const filteredInterests = availableInterests.filter(interest => 
+    interest.toLowerCase().includes(interestSearch.toLowerCase())
+  );
+  
+  // Handle interest selection/deselection
+  const toggleInterest = (interest: string) => {
+    const currentInterests = form.getValues('interests');
     if (currentInterests.includes(interest)) {
-      form.setValue("interests", currentInterests.filter(i => i !== interest));
+      form.setValue(
+        'interests', 
+        currentInterests.filter(i => i !== interest),
+        { shouldValidate: true }
+      );
     } else {
-      form.setValue("interests", [...currentInterests, interest]);
+      form.setValue(
+        'interests', 
+        [...currentInterests, interest],
+        { shouldValidate: true }
+      );
     }
   };
-
-  const onSubmit = async (values: FormValues) => {
+  
+  // Handle form submission
+  const onSubmit = async (data: TripFormValues) => {
     if (!user) {
       toast({
-        title: "Error",
+        title: "Authentication Error",
         description: "You must be logged in to create a trip",
         variant: "destructive",
       });
       return;
     }
-
-    setIsSubmitting(true);
-
+    
+    setIsLoading(true);
+    
     try {
-      // Prepare trip data
-      const tripData = {
-        title: values.title,
-        destination: values.destination,
-        description: values.description || null,
-        start_date: values.startDate.toISOString().split('T')[0],
-        end_date: values.endDate.toISOString().split('T')[0],
-        budget: values.budget,
-        max_travelers: values.maxTravelers,
+      // Format dates for database storage
+      const formattedData = {
+        ...data,
+        start_date: format(data.startDate, 'yyyy-MM-dd'),
+        end_date: format(data.endDate, 'yyyy-MM-dd'),
         user_id: user.id,
+        current_travelers: 1, // The trip creator is the first traveler
         status: 'planning',
-        interests: values.interests || [],
       };
-
-      // Insert trip into database
-      const { data, error } = await supabase
-        .from("trips")
-        .insert([tripData])
+      
+      // Remove frontend-only fields
+      delete (formattedData as any).startDate;
+      delete (formattedData as any).endDate;
+      
+      // Insert into database
+      const { data: trip, error } = await supabase
+        .from('trips')
+        .insert(formattedData)
         .select()
         .single();
-
+      
       if (error) throw error;
-
+      
       toast({
         title: "Trip Created",
-        description: "Your trip has been created successfully!",
+        description: "Your trip was successfully created!",
       });
-
-      // Navigate to the trip page
-      navigate(`/trips/${data.id}`);
+      
+      // Navigate to the new trip page
+      navigate(`/trips/${trip.id}`);
     } catch (error: any) {
-      console.error("Error creating trip:", error);
+      console.error('Error creating trip:', error);
       toast({
-        title: "Error creating trip",
-        description: error.message,
+        title: "Error",
+        description: error.message || "Failed to create trip. Please try again.",
         variant: "destructive",
       });
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
 
   return (
     <Layout>
-      <div className="container mx-auto py-12 px-4">
-        <Card className="max-w-3xl mx-auto">
-          <CardHeader>
-            <CardTitle className="text-3xl font-bold">Create a New Trip</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <div className="container mx-auto px-4 py-8 mt-16 max-w-3xl">
+        <h1 className="text-3xl font-bold mb-6">Create a Trip</h1>
+        
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              {/* Trip Title */}
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Trip Title</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Give your trip a catchy title" 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      E.g., "Weekend Getaway to the Mountains" or "European Summer Adventure"
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              {/* Destination */}
+              <FormField
+                control={form.control}
+                name="destination"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Destination</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Globe className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                        <Input 
+                          placeholder="Where are you going?" 
+                          className="pl-10"
+                          {...field} 
+                        />
+                      </div>
+                    </FormControl>
+                    <FormDescription>
+                      City, country, or region
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              {/* Trip Description */}
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Trip Description</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Tell potential travelers about your trip plans, activities, and what you're looking for in travel companions" 
+                        className="min-h-32"
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Be specific about your expectations, planned activities, and what you're looking for in travel companions
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              {/* Date Range */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField
                   control={form.control}
-                  name="title"
+                  name="startDate"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Trip Title</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Summer Adventure in Hawaii" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        Give your trip a catchy, descriptive title.
-                      </FormDescription>
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Start Date</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant={"outline"}
+                              className={cn(
+                                "pl-3 text-left font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value ? (
+                                format(field.value, "PPP")
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) => date < new Date()}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
+                
                 <FormField
                   control={form.control}
-                  name="destination"
+                  name="endDate"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Destination</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Rome, Italy" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        Where are you planning to go?
-                      </FormDescription>
+                    <FormItem className="flex flex-col">
+                      <FormLabel>End Date</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant={"outline"}
+                              className={cn(
+                                "pl-3 text-left font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value ? (
+                                format(field.value, "PPP")
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) => {
+                              const startDate = form.getValues("startDate");
+                              return date < (startDate || new Date());
+                            }}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
+              </div>
+              
+              {/* Travel Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField
                   control={form.control}
-                  name="description"
+                  name="maxTravelers"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Description</FormLabel>
+                      <FormLabel>Maximum Travelers</FormLabel>
                       <FormControl>
-                        <Textarea 
-                          placeholder="Tell potential travelers about your trip plans..."
-                          className="min-h-32"
+                        <Input 
+                          type="number" 
+                          min={2} 
+                          max={20} 
                           {...field} 
                         />
                       </FormControl>
                       <FormDescription>
-                        Share details about your itinerary, interests, and what you're looking for in travel companions.
+                        Including yourself
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField
-                    control={form.control}
-                    name="startDate"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>Start Date</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant="outline"
-                                className="pl-3 text-left font-normal flex justify-between"
-                              >
-                                {field.value ? (
-                                  format(field.value, "PPP")
-                                ) : (
-                                  <span>Pick a date</span>
-                                )}
-                                <Calendar className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <CalendarComponent
-                              mode="single"
-                              selected={field.value}
-                              onSelect={field.onChange}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="endDate"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>End Date</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant="outline"
-                                className="pl-3 text-left font-normal flex justify-between"
-                              >
-                                {field.value ? (
-                                  format(field.value, "PPP")
-                                ) : (
-                                  <span>Pick a date</span>
-                                )}
-                                <Calendar className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <CalendarComponent
-                              mode="single"
-                              selected={field.value}
-                              onSelect={field.onChange}
-                              disabled={(date) => date < new Date(form.getValues("startDate") || Date.now())}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField
-                    control={form.control}
-                    name="budget"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Budget</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a budget range" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="budget">Budget (under $1000)</SelectItem>
-                            <SelectItem value="moderate">Moderate ($1000-$3000)</SelectItem>
-                            <SelectItem value="luxury">Luxury ($3000+)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>
-                          This helps match you with compatible travel partners.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="maxTravelers"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Maximum Travelers</FormLabel>
-                        <Select 
-                          onValueChange={(value) => field.onChange(parseInt(value))} 
-                          defaultValue={field.value.toString()}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select max travelers" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {[2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
-                              <SelectItem key={num} value={num.toString()}>
-                                {num} travelers
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>
-                          How many travelers would you like to join you?
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
+                
                 <FormField
                   control={form.control}
-                  name="interests"
-                  render={() => (
+                  name="budget"
+                  render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Trip Interests</FormLabel>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {interests.map((interest) => (
-                          <Button
-                            key={interest}
-                            type="button"
-                            variant={selectedInterests.includes(interest) ? "default" : "outline"}
-                            className={`rounded-full text-sm py-1 px-3 h-auto ${
-                              selectedInterests.includes(interest) ? "bg-triplink-teal" : ""
-                            }`}
-                            onClick={() => handleInterestToggle(interest)}
-                          >
-                            {interest}
-                          </Button>
-                        ))}
-                      </div>
+                      <FormLabel>Budget Category</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select budget range" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {budgetOptions.map(option => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormDescription>
-                        Select interests that match your trip plans.
+                        Give potential companions an idea of the trip's cost
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
-                <div className="pt-4 flex justify-end">
-                  <Button type="submit" disabled={isSubmitting} className="w-full md:w-auto">
-                    {isSubmitting ? "Creating Trip..." : "Create Trip"}
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
+              </div>
+              
+              {/* Interests */}
+              <FormField
+                control={form.control}
+                name="interests"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Trip Interests</FormLabel>
+                    <FormDescription className="mt-0 mb-3">
+                      Select interests that match your trip plans (this helps find compatible travel companions)
+                    </FormDescription>
+                    
+                    {/* Show selected interests */}
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {field.value.map(interest => (
+                        <Badge 
+                          key={interest} 
+                          variant="default"
+                          className="bg-triplink-teal hover:bg-triplink-teal/80 px-3 py-1"
+                        >
+                          {interest}
+                          <X 
+                            className="ml-1 h-3 w-3 cursor-pointer" 
+                            onClick={() => toggleInterest(interest)}
+                          />
+                        </Badge>
+                      ))}
+                    </div>
+                    
+                    {/* Search and select interests */}
+                    <div className="border rounded-md">
+                      <Input 
+                        placeholder="Search for interests..." 
+                        value={interestSearch}
+                        onChange={(e) => setInterestSearch(e.target.value)}
+                        className="border-0 border-b rounded-t-md rounded-b-none focus-visible:ring-0"
+                      />
+                      
+                      <div className="p-2 max-h-40 overflow-y-auto">
+                        <div className="flex flex-wrap gap-2">
+                          {filteredInterests.map(interest => (
+                            <Badge 
+                              key={interest}
+                              variant={field.value.includes(interest) ? "default" : "outline"}
+                              className={`cursor-pointer px-2 py-1 text-xs ${
+                                field.value.includes(interest) 
+                                  ? "bg-triplink-teal hover:bg-triplink-teal/80" 
+                                  : "hover:bg-triplink-teal/10"
+                              }`}
+                              onClick={() => toggleInterest(interest)}
+                            >
+                              {interest}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              {/* Submit Button */}
+              <Button 
+                type="submit" 
+                className="w-full bg-triplink-teal hover:bg-triplink-darkBlue"
+                disabled={isLoading}
+              >
+                {isLoading ? "Creating Trip..." : "Create Trip"}
+              </Button>
+            </form>
+          </Form>
+        </div>
       </div>
     </Layout>
   );
