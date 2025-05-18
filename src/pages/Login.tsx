@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { Globe } from "lucide-react";
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { signIn } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
@@ -17,6 +18,9 @@ const Login = () => {
     rememberMe: false
   });
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Get the page the user was trying to access
+  const from = location.state?.from || "/";
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -33,7 +37,8 @@ const Login = () => {
     
     try {
       await signIn(formData.email, formData.password);
-      navigate("/");
+      // Redirect the user back to where they were trying to go
+      navigate(from);
     } catch (error) {
       // Error is handled in the Auth context
     } finally {
