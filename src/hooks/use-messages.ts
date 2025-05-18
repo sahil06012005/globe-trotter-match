@@ -14,7 +14,7 @@ export interface Message {
   profiles?: {
     full_name: string | null;
     avatar_url: string | null;
-  };
+  } | null;
 }
 
 export interface ConversationPartner {
@@ -143,18 +143,24 @@ export const useMessages = () => {
           content,
           created_at,
           read,
-          profiles!sender_id(full_name, avatar_url)
+          sender:sender_id(full_name, avatar_url)
         `)
         .or(`and(sender_id.eq.${user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user.id})`)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
       
-      const messages = data as Message[] || [];
-      setMessages(messages);
+      // Map the response to match our Message interface
+      const messagesData = (data || []).map(msg => ({
+        ...msg,
+        profiles: msg.sender
+      }));
+      
+      const typedMessages = messagesData as unknown as Message[];
+      setMessages(typedMessages);
 
       // Mark all unread messages from this partner as read
-      const unreadMessages = messages.filter(
+      const unreadMessages = typedMessages.filter(
         msg => msg.read === false && msg.receiver_id === user.id && msg.sender_id === partnerId
       );
       
@@ -178,7 +184,7 @@ export const useMessages = () => {
         }
       }
       
-      return messages;
+      return typedMessages;
     } catch (error: any) {
       console.error('Error fetching conversation:', error);
       toast({
