@@ -1,17 +1,21 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Globe, Calendar, Search } from "lucide-react";
+
 const HeroSection = () => {
   const navigate = useNavigate();
   const [destination, setDestination] = useState("");
   const [travelPeriod, setTravelPeriod] = useState("");
+  
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     navigate(`/explore?destination=${destination}&period=${travelPeriod}`);
   };
+  
   return <div className="relative bg-triplink-blue text-white">
       {/* Background image with overlay */}
       <div className="absolute inset-0 bg-cover bg-center" style={{
@@ -58,10 +62,18 @@ const HeroSection = () => {
           </form>
           
           <div className="flex flex-col items-center justify-center space-y-4 md:flex-row md:space-y-0 md:space-x-4">
-            <Button variant="outline" onClick={() => navigate("/register")} className="border-white text-white hover:text-triplink-blue bg-gray-400 hover:bg-gray-300">
+            <Button 
+              variant="outline" 
+              onClick={() => navigate("/register")} 
+              className="border-white text-white hover:bg-white hover:text-triplink-blue transition-colors"
+            >
               Sign Up - It's Free
             </Button>
-            <Button variant="ghost" className="text-white hover:bg-white/10" onClick={() => navigate("/how-it-works")}>
+            <Button 
+              variant="ghost" 
+              className="text-white hover:bg-white/20" 
+              onClick={() => navigate("/how-it-works")}
+            >
               How It Works
             </Button>
           </div>
@@ -69,4 +81,5 @@ const HeroSection = () => {
       </div>
     </div>;
 };
+
 export default HeroSection;

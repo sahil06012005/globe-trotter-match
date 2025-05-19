@@ -1,5 +1,4 @@
 
-import { useState } from 'react';
 import Layout from '@/components/layout/Layout';
 import TripForm from '@/components/trips/TripForm';
 
@@ -10,6 +9,10 @@ const CreateTrip = () => {
         <h1 className="text-3xl font-bold mb-6">Create a Trip</h1>
         
         <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <p className="text-gray-600 mb-6">
+            Share your travel plans and find companions for your next adventure. Upload a cover photo, 
+            set your preferences, and connect with other travelers.
+          </p>
           <TripForm />
         </div>
       </div>

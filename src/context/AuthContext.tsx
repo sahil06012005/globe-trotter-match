@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "react-router-dom";
 
 interface AuthContextType {
   user: User | null;
@@ -20,6 +21,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const { toast } = useToast();
+  const location = useLocation();
+
+  useEffect(() => {
+    // Check for email verification success in the URL
+    const checkEmailVerification = () => {
+      const url = new URL(window.location.href);
+      const type = url.searchParams.get('type');
+      
+      if (type === 'signup' && url.pathname.includes('/auth/callback')) {
+        // Clean the URL by removing the query parameters
+        window.history.replaceState({}, document.title, '/login');
+        
+        // Show success toast
+        setTimeout(() => {
+          toast({
+            title: "Email Verified Successfully",
+            description: "Your email has been verified. You can now log in.",
+            variant: "default",
+          });
+        }, 500);
+      }
+    };
+
+    // Run once on mount
+    checkEmailVerification();
+  }, [toast, location]);
 
   useEffect(() => {
     // Set up auth state listener FIRST to ensure we catch all auth events
@@ -49,7 +76,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
         password,
         options: {
-          data: metadata
+          data: metadata,
+          emailRedirectTo: `${window.location.origin}/auth/callback`
         }
       });
 
@@ -57,13 +85,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       toast({
         title: "Account created successfully",
-        description: "Please check your email for the confirmation link."
+        description: "Please check your email for the confirmation link.",
       });
     } catch (error: any) {
       toast({
         title: "Sign up failed",
         description: error.message,
-        variant: "destructive"
+        variant: "destructive",
       });
       throw error;
     }
@@ -86,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toast({
         title: "Sign in failed",
         description: error.message,
-        variant: "destructive"
+        variant: "destructive",
       });
       throw error;
     }
@@ -107,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toast({
         title: "Error signing out",
         description: error.message,
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false); // Reset loading state regardless of outcome

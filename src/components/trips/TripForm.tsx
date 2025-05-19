@@ -14,6 +14,7 @@ import TripBasicInfo from './TripBasicInfo';
 import TripDateSelection from './TripDateSelection';
 import TripDetails from './TripDetails';
 import TripInterests from './TripInterests';
+import TripImageUpload from './TripImageUpload';
 import { tripFormSchema } from '@/utils/trip-constants';
 
 export type TripFormValues = z.infer<typeof tripFormSchema>;
@@ -23,6 +24,7 @@ const TripForm = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string>('');
   
   // Initialize form
   const form = useForm<TripFormValues>({
@@ -64,7 +66,8 @@ const TripForm = () => {
         interests: data.interests,
         current_travelers: 1, // The trip creator is the first traveler
         status: 'planning',
-        image_url: `https://source.unsplash.com/800x600/?${encodeURIComponent(data.destination)}`
+        // Use the uploaded image or fall back to unsplash image
+        image_url: imageUrl || `https://source.unsplash.com/800x600/?${encodeURIComponent(data.destination)}`
       };
       
       // Insert into database
@@ -99,6 +102,7 @@ const TripForm = () => {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <TripBasicInfo form={form} />
+        <TripImageUpload onChange={setImageUrl} value={imageUrl} />
         <TripDateSelection form={form} />
         <TripDetails form={form} />
         <TripInterests form={form} />
