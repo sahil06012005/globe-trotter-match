@@ -1,37 +1,23 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Globe, Calendar, Search } from "lucide-react";
-
 const HeroSection = () => {
   const navigate = useNavigate();
   const [destination, setDestination] = useState("");
   const [travelPeriod, setTravelPeriod] = useState("");
-  
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     navigate(`/explore?destination=${destination}&period=${travelPeriod}`);
   };
-  
-  return (
-    <div className="relative bg-triplink-blue text-white">
+  return <div className="relative bg-triplink-blue text-white">
       {/* Background image with overlay */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center"
-        style={{ 
-          backgroundImage: "url('https://images.unsplash.com/photo-1526772662000-3f88f10405ff?auto=format&fit=crop&w=1920&q=80')",
-          backgroundBlendMode: "multiply",
-        }}
-      >
+      <div className="absolute inset-0 bg-cover bg-center" style={{
+      backgroundImage: "url('https://images.unsplash.com/photo-1526772662000-3f88f10405ff?auto=format&fit=crop&w=1920&q=80')",
+      backgroundBlendMode: "multiply"
+    }}>
         <div className="absolute inset-0 bg-black/60"></div>
       </div>
       
@@ -46,19 +32,10 @@ const HeroSection = () => {
           </p>
           
           {/* Search Form */}
-          <form 
-            onSubmit={handleSearch}
-            className="mx-auto mb-8 flex flex-col space-y-4 rounded-lg bg-white/10 backdrop-blur-sm p-4 md:p-6 md:flex-row md:space-y-0 md:space-x-4"
-          >
+          <form onSubmit={handleSearch} className="mx-auto mb-8 flex flex-col space-y-4 rounded-lg bg-white/10 backdrop-blur-sm p-4 md:p-6 md:flex-row md:space-y-0 md:space-x-4">
             <div className="flex-1 relative">
               <Globe className="absolute left-3 top-3 h-5 w-5 text-white/70" />
-              <Input
-                type="text"
-                placeholder="Where to?"
-                value={destination}
-                onChange={(e) => setDestination(e.target.value)}
-                className="pl-10 text-white bg-white/20 border-white/30 placeholder:text-white/70"
-              />
+              <Input type="text" placeholder="Where to?" value={destination} onChange={e => setDestination(e.target.value)} className="pl-10 text-white bg-white/20 border-white/30 placeholder:text-white/70" />
             </div>
             <div className="flex-1 relative">
               <Calendar className="absolute left-3 top-3 h-5 w-5 text-white/70" />
@@ -75,35 +52,21 @@ const HeroSection = () => {
                 </SelectContent>
               </Select>
             </div>
-            <Button 
-              type="submit" 
-              className="bg-triplink-coral hover:bg-triplink-coral/80 text-white"
-              disabled={!destination}
-            >
+            <Button type="submit" className="bg-triplink-coral hover:bg-triplink-coral/80 text-white" disabled={!destination}>
               <Search className="mr-2 h-4 w-4" /> Find Trips
             </Button>
           </form>
           
           <div className="flex flex-col items-center justify-center space-y-4 md:flex-row md:space-y-0 md:space-x-4">
-            <Button 
-              variant="outline" 
-              className="border-white text-white hover:bg-white hover:text-triplink-blue"
-              onClick={() => navigate("/register")}
-            >
+            <Button variant="outline" onClick={() => navigate("/register")} className="border-white text-white hover:text-triplink-blue bg-gray-400 hover:bg-gray-300">
               Sign Up - It's Free
             </Button>
-            <Button 
-              variant="ghost" 
-              className="text-white hover:bg-white/10"
-              onClick={() => navigate("/how-it-works")}
-            >
+            <Button variant="ghost" className="text-white hover:bg-white/10" onClick={() => navigate("/how-it-works")}>
               How It Works
             </Button>
           </div>
         </div>
       </div>
-    </div>
-  );
+    </div>;
 };
-
 export default HeroSection;
