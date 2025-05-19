@@ -59,6 +59,7 @@ interface UserProfile {
   bio: string;
   age: number;
   interests: string[];
+  created_at: string;
 }
 
 const TripDetails = () => {
@@ -105,11 +106,7 @@ const TripDetails = () => {
           
           if (hostError) throw hostError;
           
-          setHost({
-            ...hostData,
-            memberSince: new Date(hostData.created_at).getFullYear().toString(),
-            tripCount: 1 // We'd calculate this from the database in a real app
-          });
+          setHost(hostData);
         }
         
         // Get potential matches (users with similar interests)
@@ -148,8 +145,7 @@ const TripDetails = () => {
     if (!id) return;
     
     try {
-      // In a real app, you would fetch from a messages table related to this trip
-      // For now, we'll just use a simple query to get all messages related to this trip
+      // Use the database function to get trip discussion messages
       const { data, error } = await supabase
         .rpc('get_trip_discussion_messages', { trip_id: id })
         .order('created_at', { ascending: true });
@@ -169,7 +165,7 @@ const TripDetails = () => {
     setSendingMessage(true);
     
     try {
-      // In a real app, you would insert into a messages table
+      // Use the database function to add a message
       const { error } = await supabase
         .rpc('add_trip_discussion_message', { 
           trip_id: trip.id,
@@ -258,6 +254,7 @@ const TripDetails = () => {
   }
 
   const isOwner = user && user.id === trip.user_id;
+  const memberSince = host.created_at ? new Date(host.created_at).getFullYear().toString() : 'Unknown';
 
   return (
     <Layout>
@@ -565,7 +562,7 @@ const TripDetails = () => {
                 </div>
 
                 <p className="text-sm text-gray-600 mb-4">
-                  Member since {new Date(host.created_at).getFullYear()} • 
+                  Member since {memberSince} • 
                   {trip.current_travelers} traveler{trip.current_travelers !== 1 ? 's' : ''}
                 </p>
 

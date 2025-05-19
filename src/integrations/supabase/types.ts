@@ -119,6 +119,38 @@ export type Database = {
           },
         ]
       }
+      trip_discussions: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          trip_id: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          trip_id: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          trip_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_discussions_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trip_requests: {
         Row: {
           created_at: string | null
@@ -213,7 +245,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      add_trip_discussion_message: {
+        Args: { trip_id: string; message_content: string }
+        Returns: string
+      }
+      get_trip_discussion_messages: {
+        Args: { trip_id: string }
+        Returns: {
+          id: string
+          content: string
+          created_at: string
+          sender: Json
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
