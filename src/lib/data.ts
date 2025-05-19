@@ -1,4 +1,3 @@
-
 // Mock data for the application
 
 export interface User {
@@ -315,3 +314,7 @@ export const getMatchesForTrip = (trip: Trip): User[] => {
     user.interests.some(interest => trip.interests.includes(interest))
   );
 };
+
+// We'll leave this file alone as it has dummy data that is still used in other parts of the application
+// The FeaturedTrips component now uses real data from the database
+// When the rest of the app is fully migrated to use real data, this file can be safely refactored or removed

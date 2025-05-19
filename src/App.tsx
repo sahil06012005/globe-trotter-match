@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import Explore from "./pages/Explore";
 import TripDetails from "./pages/TripDetails";
 import CreateTrip from "./pages/CreateTrip";
+import EditTrip from "./pages/EditTrip";
 import Messages from "./pages/Messages";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -46,6 +47,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <CreateTrip />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/edit-trip/:id" 
+              element={
+                <ProtectedRoute>
+                  <EditTrip />
                 </ProtectedRoute>
               } 
             />

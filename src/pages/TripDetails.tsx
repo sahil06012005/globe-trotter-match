@@ -1,6 +1,6 @@
 
 import { useParams, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +24,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import {
   Calendar,
   DollarSign,
@@ -32,28 +32,218 @@ import {
   MapPin,
   User,
   MessageSquare,
+  Edit,
+  Send,
 } from "lucide-react";
-import { getTripById, getUserById, getMatchesForTrip } from "@/lib/data";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
+
+// Message interface
+interface Message {
+  id: string;
+  content: string;
+  created_at: string;
+  sender: {
+    id: string;
+    full_name: string;
+    avatar_url: string;
+  };
+}
+
+// User interface
+interface UserProfile {
+  id: string;
+  full_name: string;
+  avatar_url: string;
+  location: string;
+  bio: string;
+  age: number;
+  interests: string[];
+}
 
 const TripDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { user } = useAuth();
+  
+  // State for trip data
+  const [trip, setTrip] = useState<any>(null);
+  const [host, setHost] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [matches, setMatches] = useState<UserProfile[]>([]);
+  
+  // State for messaging
   const [messageText, setMessageText] = useState("");
+  const [discussionMessages, setDiscussionMessages] = useState<Message[]>([]);
+  const [sendingMessage, setSendingMessage] = useState(false);
 
-  const trip = id ? getTripById(id) : undefined;
-  const host = trip ? getUserById(trip.userId) : undefined;
-  const matches = trip ? getMatchesForTrip(trip) : [];
-
-  const handleSendMessage = () => {
-    if (messageText.trim()) {
-      // In a real app, we'd send this message to an API
-      toast({
-        title: "Message sent!",
-        description: "Your message has been sent to the trip host.",
-      });
-      setMessageText("");
+  // Fetch trip data
+  useEffect(() => {
+    const fetchTripData = async () => {
+      if (!id) return;
+      
+      try {
+        // Get trip details
+        const { data: tripData, error: tripError } = await supabase
+          .from("trips")
+          .select("*")
+          .eq("id", id)
+          .single();
+        
+        if (tripError) throw tripError;
+        
+        setTrip(tripData);
+        
+        // Get host profile
+        if (tripData.user_id) {
+          const { data: hostData, error: hostError } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", tripData.user_id)
+            .single();
+          
+          if (hostError) throw hostError;
+          
+          setHost({
+            ...hostData,
+            memberSince: new Date(hostData.created_at).getFullYear().toString(),
+            tripCount: 1 // We'd calculate this from the database in a real app
+          });
+        }
+        
+        // Get potential matches (users with similar interests)
+        if (tripData.interests && tripData.interests.length > 0) {
+          const { data: matchedUsers, error: matchesError } = await supabase
+            .from("profiles")
+            .select("*")
+            .neq("id", tripData.user_id)
+            .limit(4);
+          
+          if (!matchesError && matchedUsers) {
+            setMatches(matchedUsers);
+          }
+        }
+        
+        // Load discussion messages
+        await loadDiscussionMessages();
+        
+      } catch (error: any) {
+        console.error("Error fetching trip details:", error);
+        toast({
+          title: "Error loading trip",
+          description: error.message || "Could not load trip details",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchTripData();
+  }, [id, toast]);
+  
+  // Load discussion messages
+  const loadDiscussionMessages = async () => {
+    if (!id) return;
+    
+    try {
+      // In a real app, you would fetch from a messages table related to this trip
+      // For now, we'll just use a simple query to get all messages related to this trip
+      const { data, error } = await supabase
+        .rpc('get_trip_discussion_messages', { trip_id: id })
+        .order('created_at', { ascending: true });
+      
+      if (error) throw error;
+      
+      setDiscussionMessages(data || []);
+    } catch (error: any) {
+      console.error("Error loading messages:", error);
     }
   };
+
+  // Send a message
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !user || !trip) return;
+    
+    setSendingMessage(true);
+    
+    try {
+      // In a real app, you would insert into a messages table
+      const { error } = await supabase
+        .rpc('add_trip_discussion_message', { 
+          trip_id: trip.id,
+          message_content: messageText.trim()
+        });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Message sent",
+        description: "Your message has been posted to the discussion.",
+      });
+      
+      setMessageText("");
+      
+      // Reload messages
+      await loadDiscussionMessages();
+      
+    } catch (error: any) {
+      toast({
+        title: "Error sending message",
+        description: error.message || "Failed to send message. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  // Request to join the trip
+  const handleJoinRequest = async (message: string) => {
+    if (!user || !trip) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to request joining this trip.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      const { error } = await supabase
+        .from("trip_requests")
+        .insert({
+          trip_id: trip.id,
+          user_id: user.id,
+          message: message,
+          status: "pending"
+        });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Request sent!",
+        description: `Your request to join ${trip.title} has been sent.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error sending request",
+        description: error.message || "Failed to send join request. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="container mx-auto px-4 py-20 text-center">
+          <p>Loading trip details...</p>
+        </div>
+      </Layout>
+    );
+  }
 
   if (!trip || !host) {
     return (
@@ -66,6 +256,8 @@ const TripDetails = () => {
       </Layout>
     );
   }
+
+  const isOwner = user && user.id === trip.user_id;
 
   return (
     <Layout>
@@ -89,6 +281,17 @@ const TripDetails = () => {
                 >
                   {trip.status === "planning" ? "Open to Join" : "Confirmed"}
                 </Badge>
+                
+                {isOwner && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => navigate(`/edit-trip/${trip.id}`)}
+                    className="flex items-center gap-1"
+                  >
+                    <Edit className="h-4 w-4" /> Edit
+                  </Button>
+                )}
               </div>
               <h1 className="text-3xl font-bold mb-2">{trip.title}</h1>
               <div className="flex items-center gap-2 text-gray-600 mb-4">
@@ -99,7 +302,7 @@ const TripDetails = () => {
 
             <div className="relative h-80 rounded-lg overflow-hidden mb-8">
               <img
-                src={trip.imageUrl}
+                src={trip.image_url}
                 alt={trip.title}
                 className="w-full h-full object-cover"
               />
@@ -116,12 +319,12 @@ const TripDetails = () => {
                     <div>
                       <div className="font-medium">Dates</div>
                       <div className="text-sm">
-                        {new Date(trip.startDate).toLocaleDateString("en-US", {
+                        {new Date(trip.start_date).toLocaleDateString("en-US", {
                           day: "numeric",
                           month: "short",
                         })}{" "}
                         -{" "}
-                        {new Date(trip.endDate).toLocaleDateString("en-US", {
+                        {new Date(trip.end_date).toLocaleDateString("en-US", {
                           day: "numeric",
                           month: "short",
                           year: "numeric",
@@ -143,7 +346,7 @@ const TripDetails = () => {
                     <div>
                       <div className="font-medium">Group Size</div>
                       <div className="text-sm">
-                        {trip.currentTravelers} of {trip.maxTravelers} travelers
+                        {trip.current_travelers} of {trip.max_travelers} travelers
                       </div>
                     </div>
                   </div>
@@ -155,7 +358,7 @@ const TripDetails = () => {
 
                   <h3 className="font-medium mb-2">Interests</h3>
                   <div className="flex flex-wrap gap-2">
-                    {trip.interests.map((interest) => (
+                    {trip.interests && trip.interests.map((interest: string) => (
                       <Badge
                         key={interest}
                         variant="secondary"
@@ -169,7 +372,7 @@ const TripDetails = () => {
               </CardContent>
             </Card>
 
-            <Tabs defaultValue="matches">
+            <Tabs defaultValue="discussion">
               <TabsList className="mb-6">
                 <TabsTrigger value="matches">Potential Matches</TabsTrigger>
                 <TabsTrigger value="discussion">Discussion</TabsTrigger>
@@ -182,13 +385,13 @@ const TripDetails = () => {
                       <Card key={match.id}>
                         <CardHeader className="flex flex-row items-center gap-4 pb-2">
                           <Avatar className="h-12 w-12">
-                            <AvatarImage src={match.avatar} alt={match.name} />
+                            <AvatarImage src={match.avatar_url} alt={match.full_name} />
                             <AvatarFallback>
-                              {match.name.charAt(0)}
+                              {match.full_name?.charAt(0) || 'T'}
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <CardTitle className="text-lg">{match.name}</CardTitle>
+                            <CardTitle className="text-lg">{match.full_name}</CardTitle>
                             <CardDescription>
                               {match.location} • {match.age}
                             </CardDescription>
@@ -197,7 +400,7 @@ const TripDetails = () => {
 
                         <CardContent className="pb-2">
                           <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                            {match.bio}
+                            {match.bio || "No bio available"}
                           </p>
 
                           <div className="mb-2">
@@ -205,7 +408,7 @@ const TripDetails = () => {
                               Interests
                             </span>
                             <div className="flex flex-wrap gap-1 mt-1">
-                              {match.interests.slice(0, 3).map((interest) => (
+                              {match.interests?.slice(0, 3).map((interest: string) => (
                                 <Badge
                                   key={interest}
                                   variant="outline"
@@ -214,7 +417,7 @@ const TripDetails = () => {
                                   {interest}
                                 </Badge>
                               ))}
-                              {match.interests.length > 3 && (
+                              {match.interests?.length > 3 && (
                                 <span className="text-xs text-gray-500">
                                   +{match.interests.length - 3} more
                                 </span>
@@ -235,6 +438,7 @@ const TripDetails = () => {
                           <Button
                             size="sm"
                             className="flex-1 bg-triplink-teal hover:bg-triplink-darkBlue"
+                            onClick={() => navigate(`/messages?user=${match.id}`)}
                           >
                             <MessageSquare className="h-4 w-4 mr-2" /> Message
                           </Button>
@@ -263,30 +467,79 @@ const TripDetails = () => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                      <p className="text-gray-500 text-center">
-                        Be the first to start a conversation about this trip!
-                      </p>
+                    <div className="mb-4 space-y-4">
+                      {discussionMessages.length > 0 ? (
+                        discussionMessages.map((message) => (
+                          <div key={message.id} className="flex gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage 
+                                src={message.sender.avatar_url} 
+                                alt={message.sender.full_name} 
+                              />
+                              <AvatarFallback>
+                                {message.sender.full_name?.charAt(0) || 'U'}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1">
+                              <div className="flex justify-between items-center mb-1">
+                                <h4 className="font-medium text-sm">
+                                  {message.sender.full_name}
+                                </h4>
+                                <span className="text-xs text-gray-500">
+                                  {new Date(message.created_at).toLocaleString()}
+                                </span>
+                              </div>
+                              <p className="text-gray-700">{message.content}</p>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-4 bg-gray-50 rounded-lg text-center">
+                          <p className="text-gray-500">
+                            Be the first to start a conversation about this trip!
+                          </p>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="border rounded-lg p-4">
-                      <h4 className="font-medium mb-2">Post a message</h4>
-                      <Textarea
-                        placeholder="Ask a question or share your thoughts about this trip..."
-                        value={messageText}
-                        onChange={(e) => setMessageText(e.target.value)}
-                        className="mb-4"
-                      />
-                      <div className="flex justify-end">
+                    {user ? (
+                      <div className="border rounded-lg p-4">
+                        <h4 className="font-medium mb-2">Post a message</h4>
+                        <Textarea
+                          placeholder="Ask a question or share your thoughts about this trip..."
+                          value={messageText}
+                          onChange={(e) => setMessageText(e.target.value)}
+                          className="mb-4"
+                        />
+                        <div className="flex justify-end">
+                          <Button
+                            onClick={handleSendMessage}
+                            className="bg-triplink-teal hover:bg-triplink-darkBlue"
+                            disabled={!messageText.trim() || sendingMessage}
+                          >
+                            {sendingMessage ? (
+                              "Sending..."
+                            ) : (
+                              <>
+                                <Send className="mr-2 h-4 w-4" /> Send Message
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border rounded-lg p-4 text-center">
+                        <p className="text-gray-500 mb-3">
+                          Please sign in to join the conversation
+                        </p>
                         <Button
-                          onClick={handleSendMessage}
+                          onClick={() => navigate("/login")}
                           className="bg-triplink-teal hover:bg-triplink-darkBlue"
-                          disabled={!messageText.trim()}
                         >
-                          <MessageSquare className="mr-2 h-4 w-4" /> Send Message
+                          Sign In to Comment
                         </Button>
                       </div>
-                    </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -302,57 +555,65 @@ const TripDetails = () => {
               <CardContent>
                 <div className="flex items-center gap-4 mb-4">
                   <Avatar className="h-14 w-14">
-                    <AvatarImage src={host.avatar} alt={host.name} />
-                    <AvatarFallback>{host.name.charAt(0)}</AvatarFallback>
+                    <AvatarImage src={host.avatar_url} alt={host.full_name} />
+                    <AvatarFallback>{host.full_name?.charAt(0) || 'H'}</AvatarFallback>
                   </Avatar>
                   <div>
-                    <h3 className="font-medium">{host.name}</h3>
-                    <p className="text-sm text-gray-500">{host.location}</p>
+                    <h3 className="font-medium">{host.full_name}</h3>
+                    <p className="text-sm text-gray-500">{host.location || "No location set"}</p>
                   </div>
                 </div>
 
                 <p className="text-sm text-gray-600 mb-4">
-                  Member since {host.memberSince} • {host.tripCount} trips
+                  Member since {new Date(host.created_at).getFullYear()} • 
+                  {trip.current_travelers} traveler{trip.current_travelers !== 1 ? 's' : ''}
                 </p>
 
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button className="w-full bg-triplink-coral hover:bg-triplink-coral/80">
-                      Request to Join
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Request to join this trip</DialogTitle>
-                      <DialogDescription>
-                        Send a message to {host.name} explaining why you'd like to join this trip
-                      </DialogDescription>
-                    </DialogHeader>
-                    <Textarea
-                      placeholder="Introduce yourself and explain why you're interested in this trip..."
-                      className="min-h-32"
-                    />
-                    <DialogFooter className="sm:justify-start">
-                      <Button
-                        type="button"
-                        className="bg-triplink-teal hover:bg-triplink-darkBlue"
-                        onClick={() => {
-                          toast({
-                            title: "Request sent!",
-                            description: `Your request to join ${trip.title} has been sent to ${host.name}.`,
-                          });
-                        }}
-                      >
-                        Send Request
+                {!isOwner && (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button className="w-full bg-triplink-coral hover:bg-triplink-coral/80">
+                        Request to Join
                       </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Request to join this trip</DialogTitle>
+                        <DialogDescription>
+                          Send a message to {host.full_name} explaining why you'd like to join this trip
+                        </DialogDescription>
+                      </DialogHeader>
+                      <Textarea
+                        id="join-message"
+                        placeholder="Introduce yourself and explain why you're interested in this trip..."
+                        className="min-h-32"
+                      />
+                      <DialogFooter className="sm:justify-start">
+                        <Button
+                          type="button"
+                          className="bg-triplink-teal hover:bg-triplink-darkBlue"
+                          onClick={() => {
+                            const messageEl = document.getElementById('join-message') as HTMLTextAreaElement;
+                            handleJoinRequest(messageEl?.value || '');
+                          }}
+                        >
+                          Send Request
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
 
                 <div className="mt-4 flex flex-col gap-2">
-                  <Button variant="outline" className="w-full">
-                    <MessageSquare className="mr-2 h-4 w-4" /> Message Host
-                  </Button>
+                  {!isOwner && (
+                    <Button 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={() => navigate(`/messages?user=${host.id}`)}
+                    >
+                      <MessageSquare className="mr-2 h-4 w-4" /> Message Host
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     className="w-full"

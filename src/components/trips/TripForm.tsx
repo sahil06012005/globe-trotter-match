@@ -19,17 +19,29 @@ import { tripFormSchema } from '@/utils/trip-constants';
 
 export type TripFormValues = z.infer<typeof tripFormSchema>;
 
-const TripForm = () => {
+interface TripFormProps {
+  mode?: 'create' | 'edit';
+  tripId?: string;
+  defaultValues?: TripFormValues;
+  currentImageUrl?: string;
+}
+
+const TripForm = ({ 
+  mode = 'create', 
+  tripId, 
+  defaultValues,
+  currentImageUrl = ''
+}: TripFormProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
-  const [imageUrl, setImageUrl] = useState<string>('');
+  const [imageUrl, setImageUrl] = useState<string>(currentImageUrl);
   
   // Initialize form
   const form = useForm<TripFormValues>({
     resolver: zodResolver(tripFormSchema),
-    defaultValues: {
+    defaultValues: defaultValues || {
       title: '',
       destination: '',
       description: '',
@@ -64,33 +76,59 @@ const TripForm = () => {
         max_travelers: data.maxTravelers,
         budget: data.budget,
         interests: data.interests,
-        current_travelers: 1, // The trip creator is the first traveler
-        status: 'planning',
-        // Use the uploaded image or fall back to unsplash image
-        image_url: imageUrl || `https://source.unsplash.com/800x600/?${encodeURIComponent(data.destination)}`
+        // Use the uploaded image or fall back to unsplash image or current image
+        image_url: imageUrl || (mode === 'edit' ? currentImageUrl : `https://source.unsplash.com/800x600/?${encodeURIComponent(data.destination)}`)
       };
+
+      let trip;
       
-      // Insert into database
-      const { data: trip, error } = await supabase
-        .from('trips')
-        .insert(formattedData)
-        .select()
-        .single();
+      if (mode === 'create') {
+        // Insert new trip into database
+        const { data: newTrip, error } = await supabase
+          .from('trips')
+          .insert({
+            ...formattedData,
+            current_travelers: 1, // The trip creator is the first traveler
+            status: 'planning',
+          })
+          .select()
+          .single();
+        
+        if (error) throw error;
+        trip = newTrip;
+        
+        toast({
+          title: "Trip Created",
+          description: "Your trip was successfully created!",
+        });
+      } else {
+        // Update existing trip
+        if (!tripId) throw new Error("Trip ID is required for updates");
+        
+        const { data: updatedTrip, error } = await supabase
+          .from('trips')
+          .update(formattedData)
+          .eq('id', tripId)
+          .eq('user_id', user.id) // Ensure user owns this trip
+          .select()
+          .single();
+        
+        if (error) throw error;
+        trip = updatedTrip;
+        
+        toast({
+          title: "Trip Updated",
+          description: "Your trip was successfully updated!",
+        });
+      }
       
-      if (error) throw error;
-      
-      toast({
-        title: "Trip Created",
-        description: "Your trip was successfully created!",
-      });
-      
-      // Navigate to the new trip page
+      // Navigate to the trip page
       navigate(`/trips/${trip.id}`);
     } catch (error: any) {
-      console.error('Error creating trip:', error);
+      console.error('Error with trip:', error);
       toast({
-        title: "Error",
-        description: error.message || "Failed to create trip. Please try again.",
+        title: `Error ${mode === 'create' ? 'Creating' : 'Updating'} Trip`,
+        description: error.message || `Failed to ${mode === 'create' ? 'create' : 'update'} trip. Please try again.`,
         variant: "destructive",
       });
     } finally {
@@ -113,7 +151,10 @@ const TripForm = () => {
           className="w-full bg-triplink-teal hover:bg-triplink-darkBlue text-white"
           disabled={isLoading}
         >
-          {isLoading ? "Creating Trip..." : "Create Trip"}
+          {isLoading 
+            ? (mode === 'create' ? "Creating Trip..." : "Updating Trip...") 
+            : (mode === 'create' ? "Create Trip" : "Update Trip")
+          }
         </Button>
       </form>
     </Form>
