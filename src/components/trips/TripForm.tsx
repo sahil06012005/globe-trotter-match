@@ -8,15 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { Form } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import TripBasicInfo from './TripBasicInfo';
 import TripDateSelection from './TripDateSelection';
@@ -72,6 +64,7 @@ const TripForm = () => {
         interests: data.interests,
         current_travelers: 1, // The trip creator is the first traveler
         status: 'planning',
+        image_url: `https://source.unsplash.com/800x600/?${encodeURIComponent(data.destination)}`
       };
       
       // Insert into database
@@ -113,7 +106,7 @@ const TripForm = () => {
         {/* Submit Button */}
         <Button 
           type="submit" 
-          className="w-full bg-triplink-teal hover:bg-triplink-darkBlue"
+          className="w-full bg-triplink-teal hover:bg-triplink-darkBlue text-white"
           disabled={isLoading}
         >
           {isLoading ? "Creating Trip..." : "Create Trip"}

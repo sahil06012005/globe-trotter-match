@@ -25,16 +25,38 @@ import {
   DollarSign,
   Users,
   Filter,
-  Search
+  Search,
+  Loader2
 } from "lucide-react";
-import { trips, Trip } from "@/lib/data";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Trip {
+  id: string;
+  title: string;
+  destination: string;
+  description: string;
+  start_date: string;
+  end_date: string;
+  user_id: string;
+  max_travelers: number;
+  budget: string;
+  interests: string[];
+  current_travelers: number;
+  status: string;
+  image_url: string;
+  created_at: string;
+}
 
 const Explore = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { toast } = useToast();
   const queryParams = new URLSearchParams(location.search);
   
-  const [filteredTrips, setFilteredTrips] = useState<Trip[]>(trips);
+  const [isLoading, setIsLoading] = useState(true);
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [filteredTrips, setFilteredTrips] = useState<Trip[]>([]);
   const [searchParams, setSearchParams] = useState({
     destination: queryParams.get("destination") || "",
     period: queryParams.get("period") || "",
@@ -42,9 +64,38 @@ const Explore = () => {
     interests: [] as string[]
   });
   
+  // Fetch trips from database
+  useEffect(() => {
+    const fetchTrips = async () => {
+      setIsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('trips')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        setTrips(data as Trip[]);
+        setFilteredTrips(data as Trip[]);
+      } catch (error: any) {
+        console.error('Error fetching trips:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load trips. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchTrips();
+  }, [toast]);
+  
   // All available interests from trips
   const allInterests = Array.from(
-    new Set(trips.flatMap(trip => trip.interests))
+    new Set(trips.flatMap(trip => trip.interests || []))
   ).sort();
   
   // Apply filters when search params change
@@ -68,7 +119,7 @@ const Explore = () => {
           const nextMonth = new Date();
           nextMonth.setMonth(currentDate.getMonth() + 1);
           results = results.filter(trip => {
-            const startDate = new Date(trip.startDate);
+            const startDate = new Date(trip.start_date);
             return startDate <= nextMonth && startDate >= currentDate;
           });
           break;
@@ -76,7 +127,7 @@ const Explore = () => {
           const next3Months = new Date();
           next3Months.setMonth(currentDate.getMonth() + 3);
           results = results.filter(trip => {
-            const startDate = new Date(trip.startDate);
+            const startDate = new Date(trip.start_date);
             return startDate <= next3Months && startDate >= currentDate;
           });
           break;
@@ -84,14 +135,14 @@ const Explore = () => {
           const next6Months = new Date();
           next6Months.setMonth(currentDate.getMonth() + 6);
           results = results.filter(trip => {
-            const startDate = new Date(trip.startDate);
+            const startDate = new Date(trip.start_date);
             return startDate <= next6Months && startDate >= currentDate;
           });
           break;
         case "this-year":
           const endOfYear = new Date(currentDate.getFullYear(), 11, 31);
           results = results.filter(trip => {
-            const startDate = new Date(trip.startDate);
+            const startDate = new Date(trip.start_date);
             return startDate <= endOfYear && startDate >= currentDate;
           });
           break;
@@ -106,12 +157,14 @@ const Explore = () => {
     // Filter by interests
     if (searchParams.interests.length > 0) {
       results = results.filter(trip => 
-        searchParams.interests.some(interest => trip.interests.includes(interest))
+        searchParams.interests.some(interest => 
+          trip.interests && trip.interests.includes(interest)
+        )
       );
     }
     
     setFilteredTrips(results);
-  }, [searchParams]);
+  }, [searchParams, trips]);
   
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,7 +240,7 @@ const Explore = () => {
                 </Select>
               </div>
               
-              <Button type="submit" className="bg-triplink-teal hover:bg-triplink-darkBlue">
+              <Button type="submit" className="bg-triplink-teal hover:bg-triplink-darkBlue text-white">
                 <Search className="mr-2 h-4 w-4" /> Search Trips
               </Button>
             </div>
@@ -262,17 +315,21 @@ const Explore = () => {
           </Select>
         </div>
         
-        {filteredTrips.length > 0 ? (
+        {isLoading ? (
+          <div className="flex justify-center items-center py-20">
+            <Loader2 className="h-12 w-12 animate-spin text-triplink-teal" />
+          </div>
+        ) : filteredTrips.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredTrips.map((trip) => (
               <Card 
                 key={trip.id} 
-                className="overflow-hidden transition-all hover:shadow-md"
+                className="overflow-hidden transition-all hover:shadow-md cursor-pointer"
                 onClick={() => navigate(`/trips/${trip.id}`)}
               >
                 <div className="relative h-48 overflow-hidden">
                   <img 
-                    src={trip.imageUrl} 
+                    src={trip.image_url || `https://source.unsplash.com/800x600/?${encodeURIComponent(trip.destination)}`} 
                     alt={trip.title} 
                     className="h-full w-full object-cover transition-transform hover:scale-105"
                   />
@@ -294,8 +351,8 @@ const Explore = () => {
                     <div className="flex items-center gap-1.5">
                       <Calendar className="h-4 w-4 text-triplink-teal" />
                       <span>
-                        {new Date(trip.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - 
-                        {new Date(trip.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {new Date(trip.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - 
+                        {new Date(trip.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </span>
                     </div>
                     
@@ -307,13 +364,13 @@ const Explore = () => {
                     <div className="flex items-center gap-1.5">
                       <Users className="h-4 w-4 text-triplink-teal" />
                       <span>
-                        {trip.currentTravelers} of {trip.maxTravelers} travelers
+                        {trip.current_travelers} of {trip.max_travelers} travelers
                       </span>
                     </div>
                   </div>
                   
                   <div className="flex flex-wrap gap-1">
-                    {trip.interests.slice(0, 3).map((interest) => (
+                    {trip.interests && trip.interests.slice(0, 3).map((interest) => (
                       <Badge 
                         key={interest} 
                         variant="secondary" 
@@ -322,7 +379,7 @@ const Explore = () => {
                         {interest}
                       </Badge>
                     ))}
-                    {trip.interests.length > 3 && (
+                    {trip.interests && trip.interests.length > 3 && (
                       <span className="text-xs text-gray-500">+{trip.interests.length - 3}</span>
                     )}
                   </div>
@@ -330,7 +387,7 @@ const Explore = () => {
                 
                 <CardFooter>
                   <Button 
-                    className="w-full bg-triplink-teal hover:bg-triplink-darkBlue"
+                    className="w-full bg-triplink-teal hover:bg-triplink-darkBlue text-white"
                   >
                     View Details
                   </Button>
@@ -345,7 +402,7 @@ const Explore = () => {
             </div>
             <h3 className="text-xl font-medium mb-2">No trips found</h3>
             <p className="text-gray-500 mb-8">Try adjusting your filters to find more travel companions</p>
-            <Button onClick={resetFilters}>Reset All Filters</Button>
+            <Button onClick={resetFilters} className="hover:bg-triplink-darkBlue">Reset All Filters</Button>
           </div>
         )}
       </div>
